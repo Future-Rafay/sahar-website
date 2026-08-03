@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Leaf, Search, ShoppingBag, Wheat, X } from "lucide-react";
 
 import { useCart } from "@/components/site/cart-context";
 import { Button } from "@/components/ui/button";
@@ -37,11 +38,54 @@ type MenuCategory = {
   }>;
 };
 
+type DietFilter = "halal" | "vegetarian" | "vegan";
+
+const FILTER_CONFIG: { key: DietFilter; labelDe: string; labelEn: string; icon: React.ReactNode; color: string; activeColor: string }[] = [
+  { key: "halal",       labelDe: "Halal",        labelEn: "Halal",       icon: <ShoppingBag className="h-3.5 w-3.5" />, color: "border-emerald-600/40 text-emerald-700 hover:bg-emerald-50", activeColor: "bg-emerald-700 text-white border-emerald-700 shadow-md" },
+  { key: "vegetarian",  labelDe: "Vegetarisch",  labelEn: "Vegetarian",  icon: <Leaf className="h-3.5 w-3.5" />,        color: "border-green-600/40 text-green-700 hover:bg-green-50",     activeColor: "bg-green-700 text-white border-green-700 shadow-md" },
+  { key: "vegan",       labelDe: "Vegan",        labelEn: "Vegan",       icon: <Wheat className="h-3.5 w-3.5" />,       color: "border-teal-600/40 text-teal-700 hover:bg-teal-50",        activeColor: "bg-teal-700 text-white border-teal-700 shadow-md" },
+];
+
 export function MenuClient({ categories, locale }: { categories: MenuCategory[]; locale: "de" | "en" }) {
   const de = locale === "de";
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilters, setActiveFilters] = useState<Set<DietFilter>>(new Set());
+
+  const toggleFilter = (key: DietFilter) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const filteredCategories = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return categories
+      .map((category) => ({
+        ...category,
+        products: category.products.filter((product) => {
+          // Dietary filters — all active filters must match
+          if (activeFilters.has("halal") && !product.isHalal) return false;
+          if (activeFilters.has("vegetarian") && !product.isVegetarian) return false;
+          if (activeFilters.has("vegan") && !product.isVegan) return false;
+          // Search query
+          if (query) {
+            const haystack = [product.name, product.description ?? ""].join(" ").toLowerCase();
+            if (!haystack.includes(query)) return false;
+          }
+          return true;
+        }),
+      }))
+      .filter((category) => category.products.length > 0);
+  }, [categories, searchQuery, activeFilters]);
+
+  const totalResults = filteredCategories.reduce((sum, c) => sum + c.products.length, 0);
+  const isFiltered = searchQuery.trim() !== "" || activeFilters.size > 0;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 space-y-10">
+    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 space-y-8">
       {/* Header Banner */}
       <div className="rounded-2xl bg-surface-warm/80 border border-border/80 p-8 sm:p-10 shadow-sm relative overflow-hidden">
         <div className="relative z-10 max-w-2xl space-y-3">
@@ -59,54 +103,184 @@ export function MenuClient({ categories, locale }: { categories: MenuCategory[];
         </div>
       </div>
 
+      {/* Search + Dietary Filter Bar */}
+      <div className="space-y-3">
+        {/* Search Input */}
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
+          <input
+            id="menu-search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={de ? "Gerichte suchen…" : "Search dishes…"}
+            className="w-full min-h-12 rounded-xl border border-border/80 bg-surface pl-11 pr-10 text-sm font-medium text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary transition-all shadow-sm"
+            aria-label={de ? "Speisekarte durchsuchen" : "Search the menu"}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:text-foreground hover:bg-background transition-colors"
+              aria-label={de ? "Suche löschen" : "Clear search"}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Dietary Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-muted mr-1 shrink-0">
+            {de ? "Filter:" : "Filter:"}
+          </span>
+          {FILTER_CONFIG.map((filter) => {
+            const isActive = activeFilters.has(filter.key);
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => toggleFilter(filter.key)}
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-bold transition-all duration-200 ${
+                  isActive ? filter.activeColor : `bg-surface ${filter.color}`
+                }`}
+                aria-pressed={isActive}
+              >
+                {filter.icon}
+                {de ? filter.labelDe : filter.labelEn}
+              </button>
+            );
+          })}
+
+          {isFiltered && (
+            <button
+              type="button"
+              onClick={() => { setSearchQuery(""); setActiveFilters(new Set()); }}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border/60 bg-surface px-3 text-xs font-bold text-muted hover:text-destructive hover:border-destructive/40 transition-all ml-auto"
+            >
+              <X className="h-3.5 w-3.5" />
+              {de ? "Zurücksetzen" : "Clear all"}
+            </button>
+          )}
+        </div>
+
+        {/* Results count when filtering */}
+        {isFiltered && (
+          <p className="text-xs text-muted animate-fade-in" role="status" aria-live="polite">
+            {totalResults === 0
+              ? (de ? "Keine Gerichte gefunden." : "No dishes found.")
+              : de
+                ? `${totalResults} Gericht${totalResults !== 1 ? "e" : ""} gefunden.`
+                : `${totalResults} dish${totalResults !== 1 ? "es" : ""} found.`}
+          </p>
+        )}
+      </div>
+
       {/* Sticky Category Scroll Nav */}
       <nav
         aria-label={de ? "Menükategorien" : "Menu categories"}
         className="sticky top-[4.5rem] sm:top-[5rem] z-30 -mx-4 px-4 py-3 bg-surface/95 backdrop-blur-md border-y border-border/60 flex gap-2 overflow-x-auto no-scrollbar shadow-sm"
       >
-        {categories.map((category) => (
-          <a
-            key={category.id}
-            href={`#${category.slug}`}
-            className="min-h-10 shrink-0 content-center rounded-full border border-border/80 bg-surface px-5 text-sm font-bold text-foreground/80 hover:border-secondary hover:text-primary transition-all duration-200 shadow-sm"
-          >
-            {category.name}
-          </a>
-        ))}
+        {filteredCategories.length > 0
+          ? filteredCategories.map((category) => (
+              <a
+                key={category.id}
+                href={`#${category.slug}`}
+                className="min-h-10 shrink-0 content-center rounded-full border border-border/80 bg-surface px-5 text-sm font-bold text-foreground/80 hover:border-secondary hover:text-primary transition-all duration-200 shadow-sm"
+              >
+                {category.name}
+              </a>
+            ))
+          : categories.map((category) => (
+              <a
+                key={category.id}
+                href={`#${category.slug}`}
+                className="min-h-10 shrink-0 content-center rounded-full border border-border/80 bg-surface/50 px-5 text-sm font-bold text-muted/50 shadow-sm cursor-default"
+              >
+                {category.name}
+              </a>
+            ))}
       </nav>
 
       {/* Menu Categories & Products */}
-      <div className="space-y-16">
-        {categories.map((category) => (
-          <section
-            key={category.id}
-            id={category.slug}
-            className="scroll-mt-36 space-y-6"
-            aria-labelledby={`${category.id}-title`}
+      {filteredCategories.length === 0 ? (
+        <div className="py-20 text-center space-y-4">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-surface-warm text-muted">
+            <Search className="h-10 w-10" strokeWidth={1.5} />
+          </div>
+          <h2 className="font-display text-2xl font-bold text-primary">
+            {de ? "Keine Gerichte gefunden" : "No dishes found"}
+          </h2>
+          <p className="text-muted text-sm max-w-sm mx-auto">
+            {de
+              ? "Versuchen Sie es mit anderen Suchbegriffen oder entfernen Sie einige Filter."
+              : "Try different search terms or remove some filters."}
+          </p>
+          <button
+            type="button"
+            onClick={() => { setSearchQuery(""); setActiveFilters(new Set()); }}
+            className="inline-flex min-h-10 items-center rounded-xl bg-primary px-6 text-sm font-bold text-primary-foreground hover:bg-primary-light transition-colors"
           >
-            <div className="border-b border-border/60 pb-3">
-              <h2 id={`${category.id}-title`} className="font-display text-3xl font-bold text-primary flex items-center gap-3">
-                <span>{category.name}</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-secondary" />
-              </h2>
-              {category.description && (
-                <p className="mt-1 text-sm text-muted">{category.description}</p>
-              )}
-            </div>
+            {de ? "Alle Gerichte anzeigen" : "Show all dishes"}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-16">
+          {filteredCategories.map((category) => (
+            <section
+              key={category.id}
+              id={category.slug}
+              className="scroll-mt-36 space-y-6"
+              aria-labelledby={`${category.id}-title`}
+            >
+              <div className="border-b border-border/60 pb-3">
+                <h2 id={`${category.id}-title`} className="font-display text-3xl font-bold text-primary flex items-center gap-3">
+                  <span>{category.name}</span>
+                  <span className="h-1.5 w-1.5 rounded-full bg-secondary" />
+                  <span className="text-base font-normal text-muted">
+                    ({category.products.length})
+                  </span>
+                </h2>
+                {category.description && (
+                  <p className="mt-1 text-sm text-muted">{category.description}</p>
+                )}
+              </div>
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {category.products.map((product) => (
-                <ProductCard key={product.id} product={product} locale={locale} />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {category.products.map((product) => (
+                  <ProductCard key={product.id} product={product} locale={locale} searchQuery={searchQuery} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function ProductCard({ product, locale }: { product: MenuCategory["products"][number]; locale: "de" | "en" }) {
+function highlightText(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase().trim());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-secondary/25 text-primary rounded px-0.5 not-italic">{text.slice(idx, idx + query.trim().length)}</mark>
+      {text.slice(idx + query.trim().length)}
+    </>
+  );
+}
+
+function ProductCard({
+  product,
+  locale,
+  searchQuery,
+}: {
+  product: MenuCategory["products"][number];
+  locale: "de" | "en";
+  searchQuery: string;
+}) {
   const { add } = useCart();
   const [variantId, setVariantId] = useState(product.variants[0]?.id ?? "");
   const [choiceIds, setChoiceIds] = useState<string[]>([]);
@@ -172,11 +346,11 @@ function ProductCard({ product, locale }: { product: MenuCategory["products"][nu
       <div className="flex flex-1 flex-col p-5 justify-between space-y-4">
         <div>
           <h3 className="font-display text-lg font-bold text-foreground group-hover:text-primary transition-colors">
-            {product.name}
+            {highlightText(product.name, searchQuery)}
           </h3>
           {product.description && (
             <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-muted">
-              {product.description}
+              {highlightText(product.description, searchQuery)}
             </p>
           )}
 

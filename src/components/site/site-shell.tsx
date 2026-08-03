@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  ChevronRight,
   Globe,
   LogOut,
   Mail,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useCart } from "@/components/site/cart-context";
+import { formatChf } from "@/lib/orders";
 import { saharRealContent } from "@/content/phase-1";
 
 type SiteUser = {
@@ -33,8 +35,12 @@ export function SiteShell({ locale, user, children }: { locale: "de" | "en"; use
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { count } = useCart();
+  const { count, items } = useCart();
   const other = locale === "de" ? "en" : "de";
+
+  // Total cart price for mobile bar
+  const cartTotalRappen = items.reduce((sum, item) => sum + item.unitPriceRappen * item.quantity, 0);
+
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -498,6 +504,37 @@ export function SiteShell({ locale, user, children }: { locale: "de" | "en"; use
           </div>
         </div>
       </footer>
+      {/* MOBILE FLOATING CART BAR — appears when cart has items */}
+      {count > 0 && (
+        <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 sm:hidden animate-scale-in">
+          <button
+            type="button"
+            onClick={() => router.push(`/${locale}/cart`)}
+            className="flex min-h-14 min-w-[280px] max-w-[calc(100vw-2rem)] items-center justify-between gap-4 rounded-2xl bg-primary px-5 text-primary-foreground shadow-2xl ring-1 ring-black/10 hover:bg-primary-light active:scale-[0.98] transition-all"
+            aria-label={locale === "de" ? `Warenkorb ansehen — ${count} Artikel` : `View cart — ${count} items`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow">
+                <ShoppingBag className="h-4 w-4" />
+              </span>
+              <div className="text-left">
+                <span className="block text-xs font-semibold opacity-80">
+                  {count} {locale === "de" ? (count === 1 ? "Artikel" : "Artikel") : (count === 1 ? "item" : "items")}
+                </span>
+                <span className="block text-sm font-extrabold">
+                  {locale === "de" ? "Warenkorb ansehen" : "View cart"}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-display text-base font-extrabold">
+                {formatChf(cartTotalRappen, locale)}
+              </span>
+              <ChevronRight className="h-5 w-5 opacity-70" />
+            </div>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
