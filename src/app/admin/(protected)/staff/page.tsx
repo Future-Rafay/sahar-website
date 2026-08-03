@@ -1,0 +1,11 @@
+import { adminAction } from "@/app/admin/(protected)/actions";
+import { AdminPage, Empty, Field, Notice, SaveBar } from "@/components/admin/admin-ui";
+import { StaffToggle } from "@/components/admin/staff-toggle";
+import { Card } from "@/components/ui/card";
+import { getStaffAdminData } from "@/server/services/admin";
+
+export default async function StaffPage({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const [{ staff, invitations }, feedback] = await Promise.all([getStaffAdminData(), searchParams]);
+  const returnTo = "/admin/staff";
+  return <AdminPage title="Staff" description="Invite staff through the existing hashed, expiring invitation flow."><Notice {...feedback} /><Card><h2 className="font-display text-xl font-semibold">Invite staff member</h2><form action={adminAction} className="mt-4 space-y-4"><input type="hidden" name="intent" value="invite_staff" /><Field label="Email" name="email" type="email" autoComplete="email" required /><SaveBar returnTo={returnTo} label="Send invitation" /></form></Card><section className="mt-8" aria-labelledby="staff-list"><h2 id="staff-list" className="font-display text-2xl font-semibold">Staff accounts</h2><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{staff.length === 0 ? <Empty>No staff accounts yet.</Empty> : staff.map((member) => <Card key={member.id}><h3 className="font-semibold">{member.name || member.email}</h3><p className="mt-1 text-sm text-muted">{member.email}</p><p className={`mt-3 text-sm font-semibold ${member.active ? "text-success" : "text-destructive"}`}>{member.active ? "Active" : "Deactivated"}</p><div className="mt-6 border-t pt-5"><StaffToggle id={member.id} active={member.active} returnTo={returnTo} /></div></Card>)}</div></section><section className="mt-8" aria-labelledby="pending-invitations"><h2 id="pending-invitations" className="font-display text-2xl font-semibold">Pending invitations</h2><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{invitations.length === 0 ? <Empty>No pending invitations.</Empty> : invitations.map((invite) => <Card key={invite.id}><h3 className="font-semibold">{invite.email}</h3><p className="mt-2 text-sm text-muted">Expires {invite.expiresAt.toLocaleString("en-CH", { timeZone: "Europe/Zurich" })}</p></Card>)}</div></section></AdminPage>;
+}
