@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
+import { apiError, assertSameOrigin } from "@/server/http";
 import { acceptStaffInvitation } from "@/server/services/staff-invitations";
 
 export async function POST(request: Request) {
   try {
+    assertSameOrigin(request);
     const user = await acceptStaffInvitation(await request.json());
     return NextResponse.json({ user });
   } catch (error) {
@@ -15,6 +17,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This invitation is invalid or expired." }, { status: 410 });
     }
 
-    throw error;
+    return apiError(error);
   }
 }

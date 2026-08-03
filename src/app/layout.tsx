@@ -13,5 +13,5 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const { brand } = await getPublicConfig();
   const brandStyle = { "--brand-primary": brand.primaryColor, "--brand-secondary": brand.secondaryColor } as CSSProperties;
-  return <html lang="de"><body style={brandStyle}>{children}</body></html>;
+  return <html lang="de"><body suppressHydrationWarning  style={brandStyle}>{children}</body></html>;
 }

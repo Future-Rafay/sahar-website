@@ -1,20 +1,20 @@
 # SAHAR brand and component direction
 
-Status: `MOCK: Pending client approval`, except for the client-supplied logo and real business details.
+Status: ` Pending client approval`, except for the client-supplied logo and real business details.
 
 ## Brand system
 
-- `MOCK:` Primary plum `#6A1F3D`, secondary saffron `#C58A1F`, cream background `#FFF9F3`, white surface `#FFFFFF`, foreground `#211A1D`.
-- `MOCK:` Sora for restrained display headings and Manrope for body, controls, and admin content.
-- `MOCK:` Use the rising-horizon idea as one quiet horizontal divider or crop treatment. The supplied logo remains unchanged.
-- `MOCK:` Use generous food photography on public pages and compact image crops in admin. Temporary photographs must never imply they show SAHAR dishes.
+- `` Primary plum `#6A1F3D`, secondary saffron `#C58A1F`, cream background `#FFF9F3`, white surface `#FFFFFF`, foreground `#211A1D`.
+- `` Sora for restrained display headings and Manrope for body, controls, and admin content.
+- `` Use the rising-horizon idea as one quiet horizontal divider or crop treatment. The supplied logo remains unchanged.
+- `` Use generous food photography on public pages and compact image crops in admin. Temporary photographs must never imply they show SAHAR dishes.
 
 ## Shared component direction
 
-- `MOCK:` Public, admin, and companion app reuse the same button, form, card, dialog, status, and feedback vocabulary.
-- `MOCK:` Controls use 44px minimum touch targets, visible focus, connected labels/errors, and native elements where possible.
-- `MOCK:` Routine primary actions remain prominent. Cancel, reject, refund, delete, clear, and other dangerous actions sit in a separate area and require confirmation.
-- `MOCK:` Staff layouts may be denser, but brand tokens, control shapes, terminology, and interaction behavior stay consistent.
+- `` Public, admin, and companion app reuse the same button, form, card, dialog, status, and feedback vocabulary.
+- `` Controls use 44px minimum touch targets, visible focus, connected labels/errors, and native elements where possible.
+- `` Routine primary actions remain prominent. Cancel, reject, refund, delete, clear, and other dangerous actions sit in a separate area and require confirmation.
+- `` Staff layouts may be denser, but brand tokens, control shapes, terminology, and interaction behavior stay consistent.
 
 ## Responsive public wireframe
 
@@ -66,4 +66,4 @@ Mobile                         Desktop
 └──────────────────────┘
 ```
 
-`MOCK:` Companion app details remain directional only; implementation is blocked until the web phases and physical Android/printer requirements are approved.
+`` Companion app details remain directional only; implementation is blocked until the web phases and physical Android/printer requirements are approved.

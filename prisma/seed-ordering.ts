@@ -2,9 +2,9 @@ import type { PrismaClient } from "../src/generated/prisma/client";
 import { saharMockDeliveryZones, saharMockMenu, saharRealContent } from "../src/content/phase-1";
 
 const slugify = (value: string) =>
-  value.replace(/^MOCK:\s*/, "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  value.replace(/^\s*/, "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-const priceToRappen = (value: string) => Math.round(Number(value.replace(/^MOCK:\s*CHF\s*/, "")) * 100);
+const priceToRappen = (value: string) => Math.round(Number(value.replace(/^\s*CHF\s*/, "")) * 100);
 
 export async function seedOrderingFixtures(prisma: PrismaClient) {
   const categories = new Map<string, string>();
@@ -46,8 +46,8 @@ export async function seedOrderingFixtures(prisma: PrismaClient) {
       create: {
         productId: product.id,
         sku,
-        nameDe: "MOCK: Standard",
-        nameEn: "MOCK: Standard",
+        nameDe: " Standard",
+        nameEn: " Standard",
         priceRappen: priceToRappen(item.price),
       },
       update: { priceRappen: priceToRappen(item.price) },

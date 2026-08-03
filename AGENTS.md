@@ -55,16 +55,27 @@ Pin exact dependency versions in the lockfile when scaffolding begins. Add depen
 - `POST /api/v1/staff/orders/{orderNumber}/cancel` and the admin action share the same cancellation service. Completed/cancelled orders cannot be cancelled, reasons are required, reserved slot capacity is released, and paid Stripe orders are rejected unless the owner uses the refund-aware flow.
 - Owner refunds call Stripe outside the database transaction with a UUID idempotency key, then store the Stripe refund and update payment/order/audit state transactionally. Partial refunds do not cancel orders; cancellation requires the full remaining amount. The confirmation dialog displays the exact entered CHF amount and keeps refund/cancel controls apart from routine actions.
 - Phase 4 reused the complete existing Prisma schema, so it required no schema change or migration. Do not invent a Phase 4 migration unless a future approved requirement changes the schema.
-- Phase 5 hardening, managed infrastructure, deployment, DNS, production smoke tests, and build/deployment work remain unimplemented pending review.
+## Phase 5 hardening and deployment seams
+
+- `src/config/security.ts` is the single global browser-security header definition used by `next.config.ts`. Production blocks framing/object embedding and enables CSP, HSTS, MIME sniffing protection, referrer control, and a restrictive permissions policy; `unsafe-eval` is development-only so React debugging works without weakening production.
+- Next.js and `eslint-config-next` are pinned to `16.3.0`; this removes the high-severity PostCSS/Sharp audit findings present in `16.2.12`. Keep the framework and matching ESLint config aligned and rerun `npm audit` after upgrades.
+- `assertProductionEnvironment` in `src/config/env.ts` and `npm run phase5:preflight` reject local/placeholder infrastructure, non-TLS or non-strict MySQL, mismatched/non-HTTPS app/auth origins, short auth secrets, insecure asset origins, and Stripe test keys before production promotion. Owner seed variables remain operator-only and must not be stored in Vercel.
+- Runtime Prisma continues to use the one client in `src/server/db.ts`, now with explicit MariaDB pool limits/timeouts and verified TLS/optional CA handling. Prisma CLI migrations continue to use the immutable committed migrations and a `DATABASE_URL` ending in `sslaccept=strict`.
+- Stripe webhook claims can replay `FAILED` or stale `PROCESSING` deliveries while still deduplicating processed/concurrent events. Checkout completion verifies the stored Checkout session ID, CHF currency, exact stored amount, and public order number before payment confirmation; expired sessions also verify their stored session ID.
+- Browser-origin upload and staff-invitation mutations use the shared same-origin guard. Native mobile clients remain compatible because they do not send browser `Origin` headers.
+- Public and admin shells now provide keyboard skip links and explicit content language. Public destinations hidden from the compact header remain available in the footer; shared controls, dialogs, danger separation, touch targets, and reduced-motion behavior remain unchanged.
+- `docs/phase-5-deployment-runbook.md` is the operational source for managed MySQL/TLS/backups, S3/IAM, Stripe, Google OAuth, Resend, Vercel environments/rate limits, evidence capture, rollback, and the DNS hold point.
+- Phase 5 required no Prisma schema change or migration. Managed services, isolated `sahar_test` replay execution, production migrations/backups/smoke tests, and DNS remain pending owner access and approved real content. DNS must not be changed without explicit written launch approval.
+- Phase 6 Android work remains unimplemented pending Phase 5 review and approval.
 
 ## Phase 1 brand and content seams
 
 - `src/content/phase-1.ts` is the working Phase 1 source for supplied business details and draft bilingual menu, delivery, VAT, photography, hero, and about content. Do not duplicate these definitions elsewhere before approval.
-- Real supplied client data must remain verbatim. Every placeholder value uses the `MOCK:` prefix and nearby `// MOCK - replace with real client data` comments.
+- Real supplied client data must remain verbatim. Every placeholder value uses the `` prefix and nearby `// MOCK - replace with real client data` comments.
 - `content-todo.md` is the production-blocking inventory of every unresolved placeholder and approval. Keep it synchronized whenever mock content is added, replaced, or approved.
 - The client-supplied raster logo is stored unchanged at `public/brand/sahar-logo.png`. Do not generate replacement concepts; compact, monochrome, favicon, and Android variants still require client approval/source artwork.
 - Temporary Pexels assets live under `public/images/placeholders/`, with source and credit records in `src/content/phase-1.ts` and `content-todo.md`. They must be replaced by real Sahar photography before production and must never be presented as actual Sahar dishes.
-- Phase 1 visual and responsive direction is documented in `docs/phase-1-brand-direction.md`. Palette, typography, rising-horizon treatment, wording, menu, VAT, delivery zones, photography, and logo variants remain unapproved until their `MOCK:` entries are resolved.
+- Phase 1 visual and responsive direction is documented in `docs/phase-1-brand-direction.md`. Palette, typography, rising-horizon treatment, wording, menu, VAT, delivery zones, photography, and logo variants remain unapproved until their `` entries are resolved.
 - Phase 1 content work does not authorize Phase 3 public pages, ordering flows, database seeding, migrations, or DNS checks. The domain is registered/live, and DNS access remains a launch-time task.
 
 ## Architecture rules

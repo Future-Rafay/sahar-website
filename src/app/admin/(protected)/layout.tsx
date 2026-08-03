@@ -6,5 +6,5 @@ import { getCurrentUser } from "@/server/auth/current-user";
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user || !["OWNER", "STAFF"].includes(user.role)) redirect("/admin/login");
-  return <main className="min-h-dvh bg-background">{children}</main>;
+  return <div className="min-h-dvh bg-background">{children}</div>;
 }

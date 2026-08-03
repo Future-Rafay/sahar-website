@@ -359,20 +359,45 @@ export async function createOrder(input: CreateOrderInput, userId?: string) {
   return createdOrderDto(order, input.checkoutKey);
 }
 
-export async function processStripeEvent(event: Stripe.Event) {
+async function claimStripeEvent(event: Stripe.Event) {
+  const replayAfter = new Date(Date.now() - 5 * 60 * 1000);
+  const replay = await prisma.stripeWebhookEvent.updateMany({
+    where: {
+      eventId: event.id,
+      OR: [{ status: "FAILED" }, { status: "PROCESSING", updatedAt: { lt: replayAfter } }],
+    },
+    data: { status: "PROCESSING", error: null, processedAt: null },
+  });
+  if (replay.count === 1) return true;
+
   try {
     await prisma.stripeWebhookEvent.create({ data: { eventId: event.id, type: event.type } });
+    return true;
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return false;
     throw error;
   }
+}
+
+export async function processStripeEvent(event: Stripe.Event) {
+  if (!(await claimStripeEvent(event))) return;
+
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
       const orderId = session.metadata?.orderId ? BigInt(session.metadata.orderId) : null;
       if (!orderId || session.payment_status !== "paid") throw new OrderError("STRIPE_EVENT_INVALID");
       const order = await prisma.$transaction(async (tx) => {
-        const current = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+        const current = await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { payment: true } });
+        if (
+          current.payment?.provider !== "STRIPE"
+          || current.payment.stripeCheckoutSessionId !== session.id
+          || session.currency !== "chf"
+          || session.amount_total !== current.payment.amountRappen
+          || session.metadata?.orderNumber !== formatOrderNumber(current.id)
+        ) {
+          throw new OrderError("STRIPE_EVENT_INVALID");
+        }
         if (current.status !== "PAYMENT_PENDING") return current;
         const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
         await tx.payment.update({
@@ -391,7 +416,10 @@ export async function processStripeEvent(event: Stripe.Event) {
         orderConfirmationEmail({ orderNumber: formatOrderNumber(order.id) }),
       );
     } else if (event.type === "checkout.session.expired" && event.data.object.metadata?.orderId) {
-      await failPendingOrder(BigInt(event.data.object.metadata.orderId));
+      const orderId = BigInt(event.data.object.metadata.orderId);
+      const payment = await prisma.payment.findUnique({ where: { orderId }, select: { stripeCheckoutSessionId: true } });
+      if (payment?.stripeCheckoutSessionId !== event.data.object.id) throw new OrderError("STRIPE_EVENT_INVALID");
+      await failPendingOrder(orderId);
     }
     await prisma.stripeWebhookEvent.update({
       where: { eventId: event.id },

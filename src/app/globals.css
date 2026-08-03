@@ -1,31 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@400;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
   --brand-primary: #6a1f3d;
+  --brand-primary-light: #8b2c52;
+  --brand-primary-dark: #4a1329;
   --brand-primary-foreground: #ffffff;
   --brand-secondary: #c58a1f;
+  --brand-secondary-light: #e0a338;
   --brand-secondary-foreground: #211a1d;
   --brand-background: #fff9f3;
   --brand-surface: #ffffff;
+  --brand-surface-warm: #fdf5eb;
   --brand-foreground: #211a1d;
   --brand-muted: #766a70;
   --brand-border: #e8ddd7;
   --brand-success: #287a54;
   --brand-destructive: #b42318;
-  --brand-ring: #6a1f3d;
+  --brand-ring: #c58a1f;
   --radius-control: 0.75rem;
-  --radius-card: 1rem;
+  --radius-card: 1.25rem;
   --font-display: "Sora", "Avenir Next", sans-serif;
   --font-body: "Manrope", "Segoe UI", sans-serif;
 }
 
 @theme inline {
   --color-primary: var(--brand-primary);
+  --color-primary-light: var(--brand-primary-light);
+  --color-primary-dark: var(--brand-primary-dark);
   --color-primary-foreground: var(--brand-primary-foreground);
   --color-secondary: var(--brand-secondary);
+  --color-secondary-light: var(--brand-secondary-light);
   --color-secondary-foreground: var(--brand-secondary-foreground);
   --color-background: var(--brand-background);
   --color-surface: var(--brand-surface);
+  --color-surface-warm: var(--brand-surface-warm);
   --color-foreground: var(--brand-foreground);
   --color-muted: var(--brand-muted);
   --color-border: var(--brand-border);
@@ -44,16 +53,125 @@ html {
   background: var(--brand-background);
   color: var(--brand-foreground);
   font-family: var(--font-body);
+  scroll-behavior: smooth;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
+  background-image: 
+    radial-gradient(circle at 15% 15%, rgba(197, 138, 31, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(106, 31, 61, 0.03) 0%, transparent 40%);
+  background-attachment: fixed;
 }
 
 :focus-visible {
   outline: 3px solid var(--brand-ring);
   outline-offset: 2px;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--brand-background);
+}
+::-webkit-scrollbar-thumb {
+  background: #e2d2c7;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-secondary);
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pulseBadge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s ease-out forwards;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-pulse-badge {
+  animation: pulseBadge 0.3s ease-in-out;
+}
+
+/* Utility Classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(232, 221, 215, 0.7);
+}
+
+.glass-panel-dark {
+  background: rgba(43, 15, 27, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(197, 138, 31, 0.2);
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #c58a1f 0%, #e0a338 50%, #9a6810 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.plum-gradient {
+  background: linear-gradient(135deg, #6a1f3d 0%, #4a1329 100%);
+}
+
+.horizon-divider {
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #c58a1f 50%, transparent 100%);
+  opacity: 0.5;
 }
 
 @media (prefers-reduced-motion: reduce) {

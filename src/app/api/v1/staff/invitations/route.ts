@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { requireRole } from "@/server/auth/current-user";
+import { apiError, assertSameOrigin } from "@/server/http";
 import { inviteStaff } from "@/server/services/staff-invitations";
 
 export async function POST(request: Request) {
   try {
+    assertSameOrigin(request);
     const owner = await requireRole("OWNER");
     const invitation = await inviteStaff(owner.id, await request.json());
     return NextResponse.json({ invitation }, { status: 201 });
@@ -20,6 +22,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This owner account cannot be invited as staff." }, { status: 409 });
     }
 
-    throw error;
+    return apiError(error);
   }
 }
