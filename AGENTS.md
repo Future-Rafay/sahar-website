@@ -18,8 +18,7 @@ This repository is the standalone website and admin panel for the single Pakista
 - Stripe Checkout/webhooks/refunds, CHF integer rappen, AWS S3, Resend, and Vercel.
 - German and English public routes under `/de` and `/en`; `/` redirects to `/de`.
 - `/admin` lives in the same app and uses server-side `OWNER`/`STAFF` authorization.
-
-Pin exact dependency versions in the lockfile when scaffolding begins. Add dependencies only when native platform features or the existing stack do not cover the requirement.
+- `lucide-react` for standard UI iconography across public and admin interfaces.
 
 ## Phase 2 foundation seams
 
@@ -48,6 +47,7 @@ Pin exact dependency versions in the lockfile when scaffolding begins. Add depen
 - `src/server/services/admin.ts` is the shared Phase 4 authority for structural menu operations, product time windows, fulfilment/hours/exceptions, delivery zones/postcodes, site settings, promos, staff access, order history, cancellation, Stripe refunds, and audit queries. Admin pages and the staff cancellation API call this service instead of duplicating database rules.
 - `src/server/validators/admin.ts` validates every Phase 4 form and money/schedule trust boundary. Admin mutations use the single `adminAction` server action under `src/app/admin/(protected)/actions.ts`, which independently checks `OWNER` or `OWNER`/`STAFF` as appropriate.
 - Structural menu records use their existing `deletedAt` fields and are never physically deleted. Product variants, option groups/choices, allergens, dietary flags, and product availability windows are managed under `/admin/menu/*`; fast sold-out state remains available to both roles under `/admin/availability`.
+- `AdminShell` (`src/components/admin/admin-shell.tsx`) provides a Shopify-style administration interface with a left sidebar, top header bar, live website shortcut, far-right user avatar dropdown, profile info, and sign out action.
 - Owner-only route layouts protect menu structure, general settings, hours/exceptions, delivery zones, promos, staff, and audit pages. Staff may access the queue, availability, order history/details, eligible cancellation, cash confirmation, and routine forward transitions.
 - `SiteSettings.primaryColor` and `secondaryColor` now drive the root semantic CSS variables. General settings also own the existing contact, asset-key, bilingual hero/about/announcement, and social fields; VAT remains blocked until the business confirms it.
 - Hours use minute-of-day values and `Europe/Zurich`; exceptions replace a service window or close a day. Delivery postcodes remain unique four-digit Swiss codes, and zone fees/minimums/thresholds use integer rappen.
@@ -55,6 +55,7 @@ Pin exact dependency versions in the lockfile when scaffolding begins. Add depen
 - `POST /api/v1/staff/orders/{orderNumber}/cancel` and the admin action share the same cancellation service. Completed/cancelled orders cannot be cancelled, reasons are required, reserved slot capacity is released, and paid Stripe orders are rejected unless the owner uses the refund-aware flow.
 - Owner refunds call Stripe outside the database transaction with a UUID idempotency key, then store the Stripe refund and update payment/order/audit state transactionally. Partial refunds do not cancel orders; cancellation requires the full remaining amount. The confirmation dialog displays the exact entered CHF amount and keeps refund/cancel controls apart from routine actions.
 - Phase 4 reused the complete existing Prisma schema, so it required no schema change or migration. Do not invent a Phase 4 migration unless a future approved requirement changes the schema.
+
 ## Phase 5 hardening and deployment seams
 
 - `src/config/security.ts` is the single global browser-security header definition used by `next.config.ts`. Production blocks framing/object embedding and enables CSP, HSTS, MIME sniffing protection, referrer control, and a restrictive permissions policy; `unsafe-eval` is development-only so React debugging works without weakening production.
@@ -63,7 +64,7 @@ Pin exact dependency versions in the lockfile when scaffolding begins. Add depen
 - Runtime Prisma continues to use the one client in `src/server/db.ts`, now with explicit MariaDB pool limits/timeouts and verified TLS/optional CA handling. Prisma CLI migrations continue to use the immutable committed migrations and a `DATABASE_URL` ending in `sslaccept=strict`.
 - Stripe webhook claims can replay `FAILED` or stale `PROCESSING` deliveries while still deduplicating processed/concurrent events. Checkout completion verifies the stored Checkout session ID, CHF currency, exact stored amount, and public order number before payment confirmation; expired sessions also verify their stored session ID.
 - Browser-origin upload and staff-invitation mutations use the shared same-origin guard. Native mobile clients remain compatible because they do not send browser `Origin` headers.
-- Public and admin shells now provide keyboard skip links and explicit content language. Public destinations hidden from the compact header remain available in the footer; shared controls, dialogs, danger separation, touch targets, and reduced-motion behavior remain unchanged.
+- Public and admin shells provide keyboard skip links, explicit content language, and clear main top-padding (`pt-20 sm:pt-24`) to eliminate sticky header overlap. Public destinations hidden from the compact header remain available in the footer; shared controls, dialogs, danger separation, touch targets, and reduced-motion behavior remain unchanged.
 - `docs/phase-5-deployment-runbook.md` is the operational source for managed MySQL/TLS/backups, S3/IAM, Stripe, Google OAuth, Resend, Vercel environments/rate limits, evidence capture, rollback, and the DNS hold point.
 - Phase 5 required no Prisma schema change or migration. Managed services, isolated `sahar_test` replay execution, production migrations/backups/smoke tests, and DNS remain pending owner access and approved real content. DNS must not be changed without explicit written launch approval.
 - Phase 6 Android work remains unimplemented pending Phase 5 review and approval.
@@ -124,6 +125,9 @@ Pin exact dependency versions in the lockfile when scaffolding begins. Add depen
 ## UI and UX rules
 
 - One Sahar design language must be used across the public site, admin panel, and companion app. Staff surfaces may be denser but should not invent separate buttons, forms, cards, dialogs, or terminology.
+- Modern non-traditional floating glassmorphic navbar with rounded container and far-right User Account Dropdown menu.
+- Shopify-style admin shell with left navigation sidebar, top app bar, "Go to Website" link, and far-right user avatar menu.
+- Use standard Lucide icons (`lucide-react`) across both public and admin surfaces instead of emoji icons.
 - Primary color, secondary color, and logo come from the central Sahar brand settings and semantic CSS variables. Do not scatter raw brand values through components.
 - Target WCAG 2.2 AA: semantic HTML, connected form labels/errors, keyboard operation, visible focus, sufficient contrast, reduced-motion handling, and minimum 44px touch targets.
 - Use native elements before custom controls. Use accessible primitives for complex dialogs, menus, or selects.
@@ -150,3 +154,4 @@ Pin exact dependency versions in the lockfile when scaffolding begins. Add depen
 - Use Playwright CLI snapshots/traces for critical customer/admin flows and responsive/accessibility verification.
 - Companion-app printer work is blocked until the exact Android terminal, printer model, connection method, and 58/80mm paper width are physically confirmed.
 - Keep this file synchronized when durable architecture, routes, schema contracts, roles, payment behavior, or workflow rules change.
+
