@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, AppState, FlatList, Modal, Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { Alert, AppState, FlatList, Modal, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 
 import * as api from "./src/api";
 import { POLL_MS } from "./src/config";
@@ -58,8 +57,7 @@ export default function App() {
   if (!session) return <LoginScreen onLogin={async (next) => { setSession(next); await saveSession(next); }} />;
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen}>
         <View style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: 1, padding: 12 }]}>
           <View>
             <Text style={styles.title}>Sahar Orders</Text>
@@ -97,7 +95,6 @@ export default function App() {
           />
         ) : null}
       </SafeAreaView>
-    </SafeAreaProvider>
   );
 }
 
@@ -108,8 +105,7 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => Promise<void>
   const [loading, setLoading] = useState(false);
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen}>
         <View style={[styles.content, { flex: 1, justifyContent: "center" }]}>
           <Text style={styles.title}>Staff login</Text>
           <Text style={styles.subtitle}>Use an owner or staff account from the Sahar admin panel.</Text>
@@ -132,7 +128,6 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => Promise<void>
           />
         </View>
       </SafeAreaView>
-    </SafeAreaProvider>
   );
 }
 

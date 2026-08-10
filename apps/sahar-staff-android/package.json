@@ -9,20 +9,22 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "latest",
-    "@react-native-firebase/app": "latest",
-    "@react-native-firebase/messaging": "latest",
-    "react": "latest",
-    "react-native": "latest",
-    "react-native-safe-area-context": "latest"
+    "react": "19.2.3",
+    "react-native": "0.86.2"
   },
   "devDependencies": {
-    "@react-native-community/cli": "latest",
-    "@react-native-community/cli-platform-android": "latest",
-    "@react-native/typescript-config": "latest",
-    "@types/react": "latest",
-    "typescript": "latest"
+    "@babel/core": "^7.25.2",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "^20.2.0",
+    "@react-native-community/cli-platform-android": "^20.2.0",
+    "@react-native/babel-preset": "0.86.2",
+    "@react-native/metro-config": "0.86.2",
+    "@react-native/typescript-config": "0.86.2",
+    "@types/jest": "^29.5.13",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.8.3"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.11.0"
   }
 }

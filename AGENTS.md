@@ -170,3 +170,10 @@ This repository is the standalone website and admin panel for the single Pakista
 - Root Next.js checks intentionally ignore `apps/sahar-staff-android` until that app's own dependencies are installed inside its folder. Use its local `npm install`, `npm run android`, and `npm run typecheck` workflow after Android setup.
 - Root layout rendering is forced dynamic because Sahar brand/settings are database-backed runtime data; production build must not prerender pages by fanning out live Prisma queries.
 - `docs/phase-6-android-companion.md` is the Phase 6 handoff and hardware acceptance reference.
+
+## Android native project correction
+
+- `apps/sahar-staff-android` now includes the real React Native Android native project (`android/`) plus `index.js`, Gradle wrapper/config, and an Android-local lockfile. `npm run android` should be run from that folder after an emulator/device is visible to `adb devices`.
+- React Native dependencies are pinned to the generated 0.86.2 template-compatible versions instead of `latest`, and `@react-native/metro-config` is explicitly installed so Metro can start.
+- Because this Windows workspace path is long, React Native New Architecture C++ codegen exceeded MAX_PATH for Firebase Messaging and safe-area-context native modules. Those native packages were removed for the runnable local app; push registration currently stores `null` and keeps local vibration alert behavior. Add FCM back from a shorter app path or after Windows long paths/native build compatibility is confirmed.
+- The Android app uses React Native built-in layout primitives instead of `react-native-safe-area-context` to avoid the same generated C++ path-length failure in this workspace.
