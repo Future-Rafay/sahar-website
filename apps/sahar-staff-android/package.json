@@ -1,0 +1,28 @@
+{
+  "name": "sahar-staff-android",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "start": "react-native start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "latest",
+    "@react-native-firebase/app": "latest",
+    "@react-native-firebase/messaging": "latest",
+    "react": "latest",
+    "react-native": "latest",
+    "react-native-safe-area-context": "latest"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "latest",
+    "@react-native-community/cli-platform-android": "latest",
+    "@react-native/typescript-config": "latest",
+    "@types/react": "latest",
+    "typescript": "latest"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

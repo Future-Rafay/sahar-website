@@ -5,5 +5,5 @@ import nextTypeScript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTypeScript,
-  globalIgnores([".next/**", "src/generated/prisma/**", "output/**"]),
+  globalIgnores([".next/**", "src/generated/prisma/**", "output/**", "apps/sahar-staff-android/**"]),
 ]);

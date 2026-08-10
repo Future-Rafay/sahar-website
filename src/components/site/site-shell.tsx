@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ChevronRight,
-  Globe,
   LogOut,
   Mail,
   MapPin,
@@ -124,7 +123,7 @@ export function SiteShell({ locale, user, children }: { locale: "de" | "en"; use
     } catch {
       // fallback
     }
-    window.location.assign(`/${locale}`);
+    router.push(`/${locale}`);
   }
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : user?.email ? user.email.charAt(0).toUpperCase() : "U";

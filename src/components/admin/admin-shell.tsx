@@ -2,11 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
-  BarChart3,
   ChevronDown,
   Clock,
   ClipboardList,
@@ -14,7 +13,6 @@ import {
   Globe,
   LayoutDashboard,
   LogOut,
-  MapPin,
   Menu,
   Settings,
   ShieldCheck,
@@ -36,6 +34,7 @@ type AdminUser = {
 
 export function AdminShell({ user, children }: { user: AdminUser; children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -55,7 +54,7 @@ export function AdminShell({ user, children }: { user: AdminUser; children: Reac
     try {
       await fetch("/api/auth/signout", { method: "POST" });
     } catch {}
-    window.location.assign("/admin/login");
+    router.push("/admin/login");
   }
 
   const isOwner = user.role === "OWNER";

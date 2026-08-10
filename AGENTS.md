@@ -155,3 +155,18 @@ This repository is the standalone website and admin panel for the single Pakista
 - Companion-app printer work is blocked until the exact Android terminal, printer model, connection method, and 58/80mm paper width are physically confirmed.
 - Keep this file synchronized when durable architecture, routes, schema contracts, roles, payment behavior, or workflow rules change.
 
+
+## Phase 6 Android companion app seams
+
+- Phase 6 staff mobile API endpoints are now implemented under `/api/v1/staff/*` for login, refresh, logout, context, push-token registration, order list/detail, status, ETA, cash confirmation, cancellation, and product availability compatibility.
+- Browser admin staff routes and Android routes share the same order/admin services. Browser calls still use same-origin session authorization; Android calls use bearer access tokens backed by hashed rotating `StaffDeviceSession` refresh tokens.
+- `src/server/auth/staff-mobile-token.ts` owns signed short-lived staff access tokens. `src/server/auth/staff-mobile.ts` owns login, refresh rotation, logout revocation, bearer validation, and push-token updates.
+- `src/server/services/staff-mobile-actions.ts` is the shared source for mobile `allowedActions`; it keeps refund-required paid Stripe orders out of routine staff cancellation while allowing routine cash confirmation and eligible unpaid/cash cancellation.
+- `src/server/services/staff-order-mutations.ts` owns staff ETA mutation with optimistic version checks and audit logging. Routine status advancement remains in `src/server/services/ordering.ts`.
+- The plan's `/status` endpoint is implemented, and the older `/advance` endpoint remains for existing admin queue compatibility.
+- The separate React Native CLI Android app source lives in `apps/sahar-staff-android`. It never connects to MySQL and calls only Sahar HTTPS staff APIs.
+- The Android app implements owner/staff login, 10-second foreground polling, cached read-only offline queue state, order detail actions, ETA adjustment, FCM token registration hook, alert vibration, printer setup, cancellation reason confirmation, and ESC/POS receipt formatting.
+- Printer hardware integration remains adapter-based until the exact terminal, printer model, connection method, paper width, and ESC/POS or Android PrintService support are physically confirmed. The current adapter formats the payload and returns a pending-adapter message instead of pretending hardware has been tested.
+- Root Next.js checks intentionally ignore `apps/sahar-staff-android` until that app's own dependencies are installed inside its folder. Use its local `npm install`, `npm run android`, and `npm run typecheck` workflow after Android setup.
+- Root layout rendering is forced dynamic because Sahar brand/settings are database-backed runtime data; production build must not prerender pages by fanning out live Prisma queries.
+- `docs/phase-6-android-companion.md` is the Phase 6 handoff and hardware acceptance reference.
