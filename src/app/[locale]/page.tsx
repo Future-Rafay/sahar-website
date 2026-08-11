@@ -3,6 +3,11 @@ import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import { saharMockCopy, saharMockDeliveryZones, saharRealContent } from "@/content/phase-1";
+import { localizedMetadata } from "@/lib/metadata";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  return localizedMetadata((await params).locale, "", { de: "Sahar Restaurant Wallisellen", en: "Sahar Restaurant Wallisellen" }, { de: "Entdecken Sie das Sahar Restaurant in Wallisellen und bestellen Sie online zur Abholung oder Lieferung.", en: "Discover Sahar Restaurant in Wallisellen and order online for pickup or delivery." });
+}
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const locale = (await params).locale === "en" ? "en" : "de";
@@ -56,6 +61,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           src="/images/placeholders/persian-kebab.jpg"
           alt="Persian Cuisine Kebabs at SAHAR"
           fill
+          sizes="100vw"
           priority
           className="object-cover object-center scale-105 transition-transform duration-10000"
         />
@@ -133,6 +139,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                   src={dish.image}
                   alt={dish.name}
                   fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   className="object-cover transition-transform duration-700 group-hover:scale-105"
                 />
                 <div className="absolute top-4 left-4 rounded-full bg-primary/90 backdrop-blur-md px-3 py-1 text-xs font-bold text-white shadow">
@@ -190,6 +197,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 src="/images/placeholders/saffron-rice.jpg"
                 alt="Persian Saffron Rice & Traditions"
                 fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-primary/60 via-transparent to-transparent" />
@@ -247,7 +255,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             <Link key={i} href={`/${locale}/menu`} className="group">
               <Card hover className="p-4 text-center flex flex-col items-center gap-3">
                 <div className="relative h-20 w-20 rounded-full overflow-hidden bg-background shadow-inner">
-                  <Image src={cat.image} alt={cat.name} fill className="object-cover transition-transform group-hover:scale-110" />
+                  <Image src={cat.image} alt={cat.name} fill sizes="80px" className="object-cover transition-transform group-hover:scale-110" />
                 </div>
                 <span className="font-display text-sm font-bold text-foreground group-hover:text-primary transition-colors">
                   {cat.name}

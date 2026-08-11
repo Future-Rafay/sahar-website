@@ -3,6 +3,11 @@ import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import { saharMockCopy, saharRealContent } from "@/content/phase-1";
+import { localizedMetadata } from "@/lib/metadata";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  return localizedMetadata((await params).locale, "/about", { de: "Über Sahar", en: "About Sahar" }, { de: "Erfahren Sie mehr über das Sahar Restaurant in Wallisellen.", en: "Learn more about Sahar Restaurant in Wallisellen." });
+}
 
 export default async function AboutPage({ params }: { params: Promise<{ locale: string }> }) {
   const locale = (await params).locale === "en" ? "en" : "de";
@@ -133,16 +138,16 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="relative h-48 sm:h-64 rounded-xl overflow-hidden shadow">
-            <Image src="/images/placeholders/saffron-rice.jpg" alt="Saffron Rice" fill className="object-cover hover:scale-105 transition-transform duration-500" />
+            <Image src="/images/placeholders/saffron-rice.jpg" alt="Saffron Rice" fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover hover:scale-105 transition-transform duration-500" />
           </div>
           <div className="relative h-48 sm:h-64 rounded-xl overflow-hidden shadow">
-            <Image src="/images/placeholders/gheimeh-tahdig.jpg" alt="Gheimeh Stew" fill className="object-cover hover:scale-105 transition-transform duration-500" />
+            <Image src="/images/placeholders/gheimeh-tahdig.jpg" alt="Gheimeh Stew" fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover hover:scale-105 transition-transform duration-500" />
           </div>
           <div className="relative h-48 sm:h-64 rounded-xl overflow-hidden shadow">
-            <Image src="/images/placeholders/sholeh-zard.jpg" alt="Sholeh Zard Dessert" fill className="object-cover hover:scale-105 transition-transform duration-500" />
+            <Image src="/images/placeholders/sholeh-zard.jpg" alt="Sholeh Zard Dessert" fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover hover:scale-105 transition-transform duration-500" />
           </div>
           <div className="relative h-48 sm:h-64 rounded-xl overflow-hidden shadow">
-            <Image src="/images/placeholders/persian-tea.jpg" alt="Persian Tea" fill className="object-cover hover:scale-105 transition-transform duration-500" />
+            <Image src="/images/placeholders/persian-tea.jpg" alt="Persian Tea" fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover hover:scale-105 transition-transform duration-500" />
           </div>
         </div>
       </section>

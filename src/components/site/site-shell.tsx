@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ChevronRight,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useCart } from "@/components/site/cart-context";
+import { CustomerNotifications } from "@/components/site/customer-notifications";
 import { formatChf } from "@/lib/orders";
 import { saharRealContent } from "@/content/phase-1";
 
@@ -118,12 +120,7 @@ export function SiteShell({ locale, user, children }: { locale: "de" | "en"; use
 
   async function handleSignOut() {
     setUserDropdownOpen(false);
-    try {
-      await fetch("/api/auth/signout", { method: "POST" });
-    } catch {
-      // fallback
-    }
-    router.push(`/${locale}`);
+    await signOut({ callbackUrl: `/${locale}` });
   }
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : user?.email ? user.email.charAt(0).toUpperCase() : "U";
@@ -145,12 +142,13 @@ export function SiteShell({ locale, user, children }: { locale: "de" | "en"; use
             
             {/* Brand Logo */}
             <Link href={`/${locale}`} className="group flex items-center gap-3 py-1.5 transition-transform hover:scale-[1.02]">
-              <div className="relative h-10 w-32 sm:h-11 sm:w-40">
+              <div className="relative h-10 w-28 sm:h-11 sm:w-40">
                 <Image
                   src="/brand/sahar-logo.png"
                   alt="SAHAR Restaurant Logo"
                   fill
                   priority
+                  sizes="(max-width: 639px) 112px, 160px"
                   className="object-contain object-left"
                 />
               </div>
@@ -177,12 +175,13 @@ export function SiteShell({ locale, user, children }: { locale: "de" | "en"; use
             </nav>
 
             {/* Right Action Cluster */}
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1 sm:gap-2.5">
+              {user?.role === "CUSTOMER" && <CustomerNotifications locale={locale} />}
               {/* Language Switcher */}
               <Link
                 href={switchLangPath}
                 hrefLang={other}
-                className="inline-flex min-h-9 items-center rounded-full border border-border/80 bg-surface-warm/60 px-3 py-1 text-xs font-bold text-foreground/80 transition-all hover:border-secondary hover:bg-surface-warm hover:text-primary"
+                className="hidden min-h-9 items-center rounded-full border border-border/80 bg-surface-warm/60 px-3 py-1 text-xs font-bold text-foreground/80 transition-all hover:border-secondary hover:bg-surface-warm hover:text-primary sm:inline-flex"
                 aria-label={`Switch language to ${labels.language}`}
               >
                 <span className="mr-1 font-black text-secondary">{other.toUpperCase()}</span>
@@ -414,6 +413,7 @@ export function SiteShell({ locale, user, children }: { locale: "de" | "en"; use
                   src="/brand/sahar-logo.png"
                   alt="SAHAR Logo"
                   fill
+                  sizes="176px"
                   className="object-contain object-left"
                 />
               </div>
@@ -537,5 +537,3 @@ export function SiteShell({ locale, user, children }: { locale: "de" | "en"; use
     </div>
   );
 }
-
-

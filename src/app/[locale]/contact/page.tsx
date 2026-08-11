@@ -1,7 +1,13 @@
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
+import { ContactForm } from "@/components/site/contact-form";
 import { saharMockDeliveryZones, saharRealContent } from "@/content/phase-1";
+import { localizedMetadata } from "@/lib/metadata";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  return localizedMetadata((await params).locale, "/contact", { de: "Kontakt und Anfahrt", en: "Contact and location" }, { de: "Kontaktieren Sie Sahar oder finden Sie das Restaurant in Wallisellen.", en: "Contact Sahar or find the restaurant in Wallisellen." });
+}
 
 export default async function ContactPage({ params }: { params: Promise<{ locale: string }> }) {
   const locale = (await params).locale === "en" ? "en" : "de";
@@ -115,6 +121,15 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
             <p className="text-xs text-muted/80 pt-2">{saharRealContent.openingHours.holidayNote}</p>
           </Card>
         </div>
+      </section>
+
+      <section className="mx-auto max-w-4xl px-4 sm:px-6" aria-labelledby="contact-form-heading">
+        <Card className="p-6 sm:p-8">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-secondary">{de ? "Schreiben Sie uns" : "Send a message"}</p>
+          <h2 id="contact-form-heading" className="mt-2 font-display text-2xl font-bold text-primary">{de ? "Wie können wir helfen?" : "How can we help?"}</h2>
+          <p className="mb-6 mt-2 text-sm text-muted">{de ? "Wir antworten so bald wie möglich per E-Mail." : "We will reply by email as soon as possible."}</p>
+          <ContactForm locale={locale} />
+        </Card>
       </section>
 
       {/* Delivery Zones Section */}

@@ -480,6 +480,7 @@ function ProductCard({
                             productName: product.name,
                             variantName: variant.name,
                             unitPriceRappen: unitPrice,
+                            imageUrl: product.imageKey,
                           })
                         }
                       >

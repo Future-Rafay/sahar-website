@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { useCart } from "@/components/site/cart-context";
@@ -9,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatChf } from "@/lib/orders";
 
-type Quote = { subtotalRappen: number; discountRappen: number; deliveryFeeRappen: number; totalRappen: number };
+type Quote = { subtotalRappen: number; discountRappen: number; deliveryFeeRappen: number; totalRappen: number; estimatedMinutes: number; promoCode: string | null; promoMinimumSubtotalRappen: number | null };
 type Slot = { id: string; startsAt: string; capacity: number; bookedCount: number };
 
 const messages: Record<string, { de: string; en: string }> = {
@@ -21,6 +22,7 @@ const messages: Record<string, { de: string; en: string }> = {
   PROMO_LIMIT_REACHED: { de: "Dieser Gutschein kann nicht mehr verwendet werden.", en: "This promo code can no longer be used." },
   SLOT_FULL: { de: "Dieser Termin ist inzwischen ausgebucht.", en: "That slot has just filled up." },
   INVALID_INPUT: { de: "Bitte prüfen Sie Ihre Eingaben.", en: "Please check your details." },
+  PAYMENT_NOT_CONFIGURED: { de: "Kartenzahlung ist noch nicht konfiguriert.", en: "Card payment is not configured yet." },
 };
 
 export function CheckoutForm({ locale, user }: { locale: "de" | "en"; user?: { name?: string | null; email?: string | null } }) {
@@ -65,6 +67,13 @@ export function CheckoutForm({ locale, user }: { locale: "de" | "en"; user?: { n
     if (!response.ok) throw new Error(result.error);
     setQuote(result);
     return result as Quote;
+  }
+
+  async function applyPromo(form: HTMLFormElement) {
+    setBusy(true);
+    setError("");
+    try { await requestQuote(form); } catch (caught) { showError(caught instanceof Error ? caught.message : ""); }
+    finally { setBusy(false); }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -301,12 +310,13 @@ export function CheckoutForm({ locale, user }: { locale: "de" | "en"; user?: { n
 
           <ul className="space-y-3 text-sm divide-y divide-border/40">
             {items.map((item) => (
-              <li key={item.key} className="pt-2 flex justify-between gap-3">
-                <div className="space-y-0.5">
+              <li key={item.key} className="flex gap-3 pt-3">
+                <div className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-background"><Image src={item.imageUrl ?? "/images/placeholders/saffron-rice.jpg"} alt="" fill sizes="48px" className="object-cover" /></div>
+                <div className="min-w-0 flex-1 space-y-0.5">
                   <span className="font-semibold text-foreground">{item.quantity}× {item.productName}</span>
                   <span className="block text-xs text-muted">{item.variantName}</span>
                 </div>
-                <strong className="font-bold text-primary">{formatChf(item.unitPriceRappen * item.quantity, locale)}</strong>
+                <strong className="shrink-0 font-bold text-primary">{formatChf(item.unitPriceRappen * item.quantity, locale)}</strong>
               </li>
             ))}
           </ul>
@@ -315,7 +325,7 @@ export function CheckoutForm({ locale, user }: { locale: "de" | "en"; user?: { n
             <Label htmlFor="promoCode" className="text-xs uppercase tracking-wider text-muted">
               {de ? "Gutscheincode" : "Promo Code"}
             </Label>
-            <Input id="promoCode" name="promoCode" maxLength={64} placeholder="z.B. WELCOME10" className="mt-1 uppercase font-mono text-sm" />
+            <div className="mt-1 flex gap-2"><Input id="promoCode" name="promoCode" maxLength={64} placeholder="WELCOME10" className="uppercase font-mono text-sm" /><Button type="button" variant="outline" disabled={busy} onClick={(event) => event.currentTarget.form && applyPromo(event.currentTarget.form)}>{de ? "Anwenden" : "Apply Coupon"}</Button></div>
           </div>
 
           {quote && (
@@ -332,8 +342,11 @@ export function CheckoutForm({ locale, user }: { locale: "de" | "en"; user?: { n
               )}
               <div className="flex justify-between text-muted">
                 <dt>{de ? "Liefergebühr" : "Delivery fee"}</dt>
-                <dd className="font-semibold text-foreground">{formatChf(quote.deliveryFeeRappen, locale)}</dd>
+                <dd className="font-semibold text-foreground">{quote.deliveryFeeRappen ? formatChf(quote.deliveryFeeRappen, locale) : (de ? "Kostenlos" : "Free")}</dd>
               </div>
+              <div className="flex justify-between text-muted"><dt>{fulfillmentType === "DELIVERY" ? (de ? "Erwartete Lieferung" : "Expected delivery") : (de ? "Abholbereit in" : "Ready for pickup")}</dt><dd className="font-semibold text-foreground">{timing === "SCHEDULED" && scheduledFor ? new Intl.DateTimeFormat(de ? "de-CH" : "en-CH", { timeZone: "Europe/Zurich", hour: "2-digit", minute: "2-digit" }).format(new Date(scheduledFor)) : `~${quote.estimatedMinutes} min`}</dd></div>
+              {quote.promoCode && <div className="flex justify-between text-success"><dt>{de ? "Gutschein" : "Coupon"}</dt><dd className="font-mono font-semibold">{quote.promoCode}</dd></div>}
+              {quote.promoCode && quote.discountRappen === 0 && quote.promoMinimumSubtotalRappen && quote.subtotalRappen < quote.promoMinimumSubtotalRappen && <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{de ? `Noch ${formatChf(quote.promoMinimumSubtotalRappen - quote.subtotalRappen, locale)} bis zum Mindestbetrag.` : `Add ${formatChf(quote.promoMinimumSubtotalRappen - quote.subtotalRappen, locale)} to reach the coupon minimum.`}</p>}
               <div className="flex justify-between border-t border-border/80 pt-3 text-xl font-bold text-primary">
                 <dt>Total</dt>
                 <dd className="font-display">{formatChf(quote.totalRappen, locale)}</dd>

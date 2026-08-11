@@ -1,8 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 
 import { AuthForm } from "@/components/site/auth-form";
 import { Card } from "@/components/ui/card";
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function LoginPage({ params }: { params: Promise<{ locale: string }> }) {
   const locale = (await params).locale === "en" ? "en" : "de";

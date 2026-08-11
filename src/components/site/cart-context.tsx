@@ -10,12 +10,14 @@ export type CartItem = {
   productName: string;
   variantName: string;
   unitPriceRappen: number;
+  imageUrl?: string | null;
 };
 
 type CartContextValue = {
   items: CartItem[];
   add: (item: Omit<CartItem, "key">) => void;
   remove: (key: string) => void;
+  setQuantity: (key: string, quantity: number) => void;
   clear: () => void;
   count: number;
 };
@@ -47,6 +49,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     items,
     add: (item) => setItems((current) => [...current, { ...item, key: crypto.randomUUID() }]),
     remove: (key) => setItems((current) => current.filter((item) => item.key !== key)),
+    setQuantity: (key, quantity) => setItems((current) => quantity < 1
+      ? current.filter((item) => item.key !== key)
+      : current.map((item) => item.key === key ? { ...item, quantity: Math.min(99, quantity) } : item)),
     clear: () => setItems([]),
     count: items.reduce((sum, item) => sum + item.quantity, 0),
   }), [items]);
