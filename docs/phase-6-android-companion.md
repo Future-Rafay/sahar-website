@@ -13,7 +13,8 @@ The app never connects to MySQL and never stores database credentials.
 - Bearer access token calls to staff APIs.
 - Active order queue with 10 second polling and refresh on foreground focus.
 - Read-only cached order list while offline.
-- Order detail actions for status advance, ETA adjustment, cash confirmation, cancellation with reason, and receipt print attempt.
+- Order detail actions for status advance, ETA adjustment, cash confirmation, routine cancellation, full Stripe refund-and-cancel, and receipt print attempt.
+- All authenticated actions refresh an expired access token once before failing.
 - Push-token registration hook for Firebase Cloud Messaging.
 - Printer setup screen with 58mm/80mm selection.
 - ESC/POS receipt text formatting.
@@ -31,6 +32,13 @@ The app never connects to MySQL and never stores database credentials.
 - `PATCH /api/v1/staff/orders/{orderNumber}/eta`
 - `PATCH /api/v1/staff/orders/{orderNumber}/cash-payment`
 - `POST /api/v1/staff/orders/{orderNumber}/cancel`
+- `POST /api/v1/staff/orders/{orderNumber}/refund-cancel`
+
+## Release and admin download
+
+- Debug builds use `http://10.0.2.2:3000`; release builds use `https://sahar.ch`.
+- Release signing reads `SAHAR_RELEASE_STORE_FILE`, `SAHAR_RELEASE_STORE_PASSWORD`, `SAHAR_RELEASE_KEY_ALIAS`, and `SAHAR_RELEASE_KEY_PASSWORD` from Gradle properties or environment variables. Never commit them.
+- Publish the signed APK to S3 with `Content-Disposition: attachment`, then set the website's optional `STAFF_APK_URL`. The admin download control remains disabled until that URL is configured.
 
 The legacy `/advance` route remains as a compatibility alias for the existing admin queue.
 

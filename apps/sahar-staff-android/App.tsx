@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Alert, AppState, FlatList, Modal, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, AppState, FlatList, Image, Modal, Platform, Pressable, ScrollView, StatusBar, Text, View } from "react-native";
 
 import * as api from "./src/api";
-import { POLL_MS } from "./src/config";
+import { API_BASE_URL, POLL_MS } from "./src/config";
 import { printReceipt, type PrinterConfig } from "./src/printer/adapter";
 import { registerDeviceForPush, playNewOrderAlert } from "./src/push";
 import { loadCachedOrders, loadSession, saveCachedOrders, saveSession } from "./src/storage";
@@ -10,6 +10,7 @@ import type { Order, Session } from "./src/types";
 import { Button, Field, Loading, colors, styles } from "./src/ui";
 
 type Screen = "queue" | "settings";
+type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export default function App() {
   const [booting, setBooting] = useState(true);
@@ -19,6 +20,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("queue");
   const [offline, setOffline] = useState(false);
   const [printer, setPrinter] = useState<PrinterConfig>({ paperWidth: 58, connection: "bluetooth-escpos" });
+  const latestOrderNumber = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     Promise.all([loadSession(), loadCachedOrders()]).then(([savedSession, cachedOrders]) => {
@@ -28,18 +30,32 @@ export default function App() {
     });
   }, []);
 
+  const runAuthorized = useCallback(async <T,>(operation: (accessToken: string) => Promise<T>) => {
+    if (!session) throw new api.ApiError(401, "TOKEN_REQUIRED");
+    try {
+      return await operation(session.accessToken);
+    } catch (error) {
+      if (!(error instanceof api.ApiError) || error.status !== 401) throw error;
+      const refreshed = await api.refresh(session.refreshToken);
+      setSession(refreshed);
+      await saveSession(refreshed);
+      return operation(refreshed.accessToken);
+    }
+  }, [session]);
+
   const loadOrders = useCallback(async () => {
     if (!session) return;
     try {
-      const next = await api.getOrders(session.accessToken);
-      if (orders.length && next[0]?.orderNumber && next[0].orderNumber !== orders[0]?.orderNumber) playNewOrderAlert();
+      const next = await runAuthorized(api.getOrders);
+      if (latestOrderNumber.current && next[0]?.orderNumber && next[0].orderNumber !== latestOrderNumber.current) playNewOrderAlert();
+      latestOrderNumber.current = next[0]?.orderNumber;
       setOrders(next);
       setOffline(false);
       await saveCachedOrders(next);
     } catch {
       setOffline(true);
     }
-  }, [orders, session]);
+  }, [runAuthorized, session]);
 
   useEffect(() => {
     void loadOrders();
@@ -57,7 +73,8 @@ export default function App() {
   if (!session) return <LoginScreen onLogin={async (next) => { setSession(next); await saveSession(next); }} />;
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <View style={[styles.screen, { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0, paddingBottom: 12 }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
         <View style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: 1, padding: 12 }]}>
           <View>
             <Text style={styles.title}>Sahar Orders</Text>
@@ -70,6 +87,7 @@ export default function App() {
         {screen === "settings" ? (
           <SettingsScreen
             session={session}
+            runAuthorized={runAuthorized}
             printer={printer}
             setPrinter={setPrinter}
             onLogout={async () => {
@@ -86,7 +104,7 @@ export default function App() {
             order={selected}
             offline={offline}
             printer={printer}
-            token={session.accessToken}
+            runAuthorized={runAuthorized}
             onClose={() => setSelected(null)}
             onChanged={async () => {
               setSelected(null);
@@ -94,7 +112,7 @@ export default function App() {
             }}
           />
         ) : null}
-      </SafeAreaView>
+      </View>
   );
 }
 
@@ -105,8 +123,10 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => Promise<void>
   const [loading, setLoading] = useState(false);
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <View style={[styles.screen, { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0, paddingBottom: 12 }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
         <View style={[styles.content, { flex: 1, justifyContent: "center" }]}>
+          <Image source={{ uri: `${API_BASE_URL}/brand/sahar-logo.png` }} resizeMode="contain" style={{ alignSelf: "center", height: 100, marginBottom: 18, width: 240 }} />
           <Text style={styles.title}>Staff login</Text>
           <Text style={styles.subtitle}>Use an owner or staff account from the Sahar admin panel.</Text>
           <Field label="Email" value={email} onChangeText={setEmail} />
@@ -127,7 +147,7 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => Promise<void>
             }}
           />
         </View>
-      </SafeAreaView>
+      </View>
   );
 }
 
@@ -137,7 +157,7 @@ function QueueScreen({ orders, offline, onSelect }: { orders: Order[]; offline: 
       contentContainerStyle={styles.content}
       data={orders}
       keyExtractor={(item) => item.orderNumber}
-      ListEmptyComponent={<Text style={styles.subtitle}>No active orders.</Text>}
+      ListEmptyComponent={<View style={[styles.center, { minHeight: 420 }]}><Text style={[styles.title, { fontSize: 30 }]}>No Orders Available</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{new Intl.DateTimeFormat("en-CH", { dateStyle: "full", timeStyle: "short", timeZone: "Europe/Zurich" }).format(new Date())}</Text></View>}
       renderItem={({ item }) => (
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${item.orderNumber}`} disabled={offline} onPress={() => onSelect(item)} style={({ pressed }) => [styles.card, pressed && styles.pressed, offline && styles.disabled]}>
           <View style={styles.row}>
@@ -151,12 +171,12 @@ function QueueScreen({ orders, offline, onSelect }: { orders: Order[]; offline: 
   );
 }
 
-function OrderModal({ order, token, offline, printer, onClose, onChanged }: { order: Order; token: string; offline: boolean; printer: PrinterConfig; onClose: () => void; onChanged: () => Promise<void> }) {
+function OrderModal({ order, runAuthorized, offline, printer, onClose, onChanged }: { order: Order; runAuthorized: AuthorizedRequest; offline: boolean; printer: PrinterConfig; onClose: () => void; onChanged: () => Promise<void> }) {
   const [reasonOpen, setReasonOpen] = useState(false);
   const [reason, setReason] = useState("");
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.screen}>
+      <View style={[styles.screen, { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0, paddingBottom: 12 }]}>
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.row}>
             <Text style={styles.title}>{order.orderNumber}</Text>
@@ -176,25 +196,25 @@ function OrderModal({ order, token, offline, printer, onClose, onChanged }: { or
             ))}
           </View>
           <Button label="Print receipt" disabled={offline} onPress={async () => Alert.alert("Printer", (await printReceipt(order, printer)).message)} />
-          <Button label="Add 10 min" disabled={offline || ["COMPLETED", "CANCELLED"].includes(order.status)} onPress={async () => { const base = order.estimatedReadyAt ? new Date(order.estimatedReadyAt) : new Date(); await api.updateEta(token, order, new Date(base.getTime() + 10 * 60_000).toISOString()); await onChanged(); }} />
-          <Button label={order.allowedActions.nextStatus ? `Move to ${order.allowedActions.nextStatus}` : "No next status"} disabled={offline || !order.allowedActions.nextStatus} onPress={async () => { await api.advanceOrder(token, order); await onChanged(); }} />
-          <Button label="Confirm cash paid" disabled={offline || !order.allowedActions.canConfirmCash} onPress={async () => { await api.confirmCash(token, order.orderNumber); await onChanged(); }} />
+          <Button label="Add 10 min" disabled={offline || ["COMPLETED", "CANCELLED"].includes(order.status)} onPress={async () => { const base = order.estimatedReadyAt ? new Date(order.estimatedReadyAt) : new Date(); await runAuthorized((token) => api.updateEta(token, order, new Date(base.getTime() + 10 * 60_000).toISOString())); await onChanged(); }} />
+          <Button label={order.allowedActions.nextStatus ? `Move to ${order.allowedActions.nextStatus}` : "No next status"} disabled={offline || !order.allowedActions.nextStatus} onPress={async () => { await runAuthorized((token) => api.advanceOrder(token, order)); await onChanged(); }} />
+          <Button label="Confirm cash paid" disabled={offline || !order.allowedActions.canConfirmCash} onPress={async () => { await runAuthorized((token) => api.confirmCash(token, order.orderNumber)); await onChanged(); }} />
           <View style={{ height: 20 }} />
-          <Button label="Cancel order" danger disabled={offline || !order.allowedActions.canCancel} onPress={() => setReasonOpen(true)} />
+          <Button label={order.allowedActions.canRefundAndCancel ? "Refund & cancel" : "Cancel order"} danger disabled={offline || (!order.allowedActions.canCancel && !order.allowedActions.canRefundAndCancel)} onPress={() => setReasonOpen(true)} />
           {reasonOpen ? (
             <View style={[styles.card, { borderColor: colors.danger }]}>
-              <Text style={styles.label}>Cancellation reason</Text>
+              <Text style={styles.label}>{order.allowedActions.canRefundAndCancel ? `Full refund CHF ${(order.remainingRefundableRappen / 100).toFixed(2)} and cancellation` : "Cancellation reason"}</Text>
               <Field label="Reason" value={reason} onChangeText={setReason} multiline />
-              <Button label="Confirm cancellation" danger disabled={reason.trim().length < 3} onPress={async () => { await api.cancelOrder(token, order.orderNumber, reason); await onChanged(); }} />
+              <Button label={order.allowedActions.canRefundAndCancel ? "Confirm refund & cancellation" : "Confirm cancellation"} danger disabled={reason.trim().length < 3} onPress={async () => { if (order.allowedActions.canRefundAndCancel) await runAuthorized((token) => api.refundAndCancelOrder(token, order, reason)); else await runAuthorized((token) => api.cancelOrder(token, order.orderNumber, reason)); await onChanged(); }} />
             </View>
           ) : null}
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
 
-function SettingsScreen({ session, printer, setPrinter, onLogout }: { session: Session; printer: PrinterConfig; setPrinter: (config: PrinterConfig) => void; onLogout: () => Promise<void> }) {
+function SettingsScreen({ session, runAuthorized, printer, setPrinter, onLogout }: { session: Session; runAuthorized: AuthorizedRequest; printer: PrinterConfig; setPrinter: (config: PrinterConfig) => void; onLogout: () => Promise<void> }) {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.card}>
@@ -209,7 +229,7 @@ function SettingsScreen({ session, printer, setPrinter, onLogout }: { session: S
           <Button label="80mm" onPress={() => setPrinter({ ...printer, paperWidth: 80 })} />
         </View>
       </View>
-      <Button label="Register push alerts" onPress={() => registerDeviceForPush(session.accessToken).catch(() => Alert.alert("Push setup failed", "Check Firebase configuration."))} />
+      <Button label="Register push alerts" onPress={() => runAuthorized(registerDeviceForPush).catch(() => Alert.alert("Push setup failed", "Check Firebase configuration."))} />
       <View style={{ height: 24 }} />
       <Button label="Sign out" danger onPress={onLogout} />
     </ScrollView>

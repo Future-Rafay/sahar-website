@@ -27,6 +27,7 @@ This repository is the standalone website and admin panel for the single Pakista
 - The initial `OWNER` is created only by `prisma/seed.ts` from `OWNER_EMAIL`, `OWNER_PASSWORD`, and `OWNER_NAME`. Staff accounts are created only through the hashed, expiring invitation flow under `/api/v1/staff/invitations`.
 - S3 upload authorization lives in `src/server/storage/s3.ts`; only server-issued, validated presigned uploads are allowed.
 - Resend calls go through `src/server/email/client.ts`; placeholder keys must not send real email.
+- Product create/edit forms use the shared presigned S3 image field and persist only `Product.imageKey`; categories do not have images. Public contact submissions use `/api/v1/public/contact`, shared validation, same-origin protection, and the same branded Resend template seam.
 - German and English message files live under `src/messages`; shared accessible primitives live under `src/components/ui`.
 - Local migrations and seeds may target only the dedicated `sahar_dev` schema. Never reuse a Foodeez or unrelated database connection.
 
@@ -41,20 +42,24 @@ This repository is the standalone website and admin panel for the single Pakista
 - Order emails use `NotificationDelivery.deduplicationKey` and are sent only after database transactions. Placeholder Resend keys remain non-sending. Stripe requires `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in addition to `APP_URL`.
 - `prisma/seed-ordering.ts` adds idempotent MOCK-prefixed development menu, zones, hours, and `WELCOME10`; replace these only with approved Sahar data and keep `content-todo.md` synchronized.
 - `src/components/site/cart-context.tsx` owns the versioned local browser cart. Server quote/order endpoints ignore browser prices and always rebuild totals from current database variants/options.
+- Customer order DTOs and quote responses include server-resolved product image URLs and ETA details. Signed-in navbar notifications are derived from order `updatedAt`; no separate notification table or client-side order state machine is introduced.
+- Stripe Checkout is server-created with itemized CHF snapshot lines, allocated promo discounts, delivery fees, and public product image URLs. `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` remain the only Stripe secrets required; webhook confirmation remains authoritative.
 
 ## Phase 4 admin operations seams
 
 - `src/server/services/admin.ts` is the shared Phase 4 authority for structural menu operations, product time windows, fulfilment/hours/exceptions, delivery zones/postcodes, site settings, promos, staff access, order history, cancellation, Stripe refunds, and audit queries. Admin pages and the staff cancellation API call this service instead of duplicating database rules.
 - `src/server/validators/admin.ts` validates every Phase 4 form and money/schedule trust boundary. Admin mutations use the single `adminAction` server action under `src/app/admin/(protected)/actions.ts`, which independently checks `OWNER` or `OWNER`/`STAFF` as appropriate.
 - Structural menu records use their existing `deletedAt` fields and are never physically deleted. Product variants, option groups/choices, allergens, dietary flags, and product availability windows are managed under `/admin/menu/*`; fast sold-out state remains available to both roles under `/admin/availability`.
-- `AdminShell` (`src/components/admin/admin-shell.tsx`) provides a Shopify-style administration interface with a left sidebar, top header bar, live website shortcut, far-right user avatar dropdown, profile info, and sign out action.
+- `AdminShell` (`src/components/admin/admin-shell.tsx`) provides a Shopify-style administration interface with a left sidebar, top header bar, signed staff APK download state, live website shortcut, far-right user avatar dropdown, profile info, and sign out action. `STAFF_APK_URL` is optional until a production-signed S3 artifact exists.
 - Owner-only route layouts protect menu structure, general settings, hours/exceptions, delivery zones, promos, staff, and audit pages. Staff may access the queue, availability, order history/details, eligible cancellation, cash confirmation, and routine forward transitions.
 - `SiteSettings.primaryColor` and `secondaryColor` now drive the root semantic CSS variables. General settings also own the existing contact, asset-key, bilingual hero/about/announcement, and social fields; VAT remains blocked until the business confirms it.
 - Hours use minute-of-day values and `Europe/Zurich`; exceptions replace a service window or close a day. Delivery postcodes remain unique four-digit Swiss codes, and zone fees/minimums/thresholds use integer rappen.
-- Staff invitations still use the hashed 48-hour token and Resend flow. Invitations, acceptance, activation, and deactivation write audit events; deactivation also invalidates existing web sessions.
-- `POST /api/v1/staff/orders/{orderNumber}/cancel` and the admin action share the same cancellation service. Completed/cancelled orders cannot be cancelled, reasons are required, reserved slot capacity is released, and paid Stripe orders are rejected unless the owner uses the refund-aware flow.
-- Owner refunds call Stripe outside the database transaction with a UUID idempotency key, then store the Stripe refund and update payment/order/audit state transactionally. Partial refunds do not cancel orders; cancellation requires the full remaining amount. The confirmation dialog displays the exact entered CHF amount and keeps refund/cancel controls apart from routine actions.
+- Staff invitations still use the hashed 48-hour token and Resend flow, and acceptance is served by `/admin/invitations/accept`. Invitations, acceptance, activation, and deactivation write audit events; deactivation also invalidates existing web sessions.
+- `POST /api/v1/staff/orders/{orderNumber}/cancel` and the admin action share the same cancellation service. Completed/cancelled orders cannot be cancelled, reasons are required, reserved slot capacity is released, and paid Stripe orders require the full refund-and-cancel flow.
+- Owner refunds call Stripe outside the database transaction with an idempotency key; OWNER and STAFF may request a full remaining refund tied to cancellation, while partial refunds remain OWNER-only. Refund webhook events finalize payment totals and cancellation only after Stripe succeeds. Confirmation displays the exact CHF amount and keeps refund/cancel controls apart from routine actions.
 - Phase 4 reused the complete existing Prisma schema, so it required no schema change or migration. Do not invent a Phase 4 migration unless a future approved requirement changes the schema.
+- The admin dashboard is a summary surface (net paid revenue after refunds, order/product counts, and recent orders); the polling operational queue lives at `/admin/orders/live` and exposes the shared staff ETA mutation.
+- Admin money forms accept human-readable CHF decimals and convert them to integer rappen only in shared validators. Weekly hours and availability windows use native time inputs; structural create/edit forms use compact dialogs and list rows.
 
 ## Phase 5 hardening and deployment seams
 
@@ -119,8 +124,8 @@ This repository is the standalone website and admin panel for the single Pakista
 - Placed order items and totals are immutable snapshots. Staff do not edit items after checkout.
 - Customer cancellation is not self-service.
 - `STAFF` handles routine order state/ETA, cash confirmation, eligible cash/unpaid cancellation, and sold-out state.
-- `OWNER` manages structural menu/settings/staff/promos and all Stripe refund actions.
-- A paid Stripe order must not be cancelled unless the owner refund flow succeeds or Stripe accepts the refund request.
+- `OWNER` manages structural menu/settings/staff/promos and partial Stripe refunds. `OWNER` and `STAFF` may request a full remaining refund tied to cancellation.
+- A paid Stripe order must not be cancelled until the full Stripe refund succeeds.
 
 ## UI and UX rules
 
@@ -161,7 +166,7 @@ This repository is the standalone website and admin panel for the single Pakista
 - Phase 6 staff mobile API endpoints are now implemented under `/api/v1/staff/*` for login, refresh, logout, context, push-token registration, order list/detail, status, ETA, cash confirmation, cancellation, and product availability compatibility.
 - Browser admin staff routes and Android routes share the same order/admin services. Browser calls still use same-origin session authorization; Android calls use bearer access tokens backed by hashed rotating `StaffDeviceSession` refresh tokens.
 - `src/server/auth/staff-mobile-token.ts` owns signed short-lived staff access tokens. `src/server/auth/staff-mobile.ts` owns login, refresh rotation, logout revocation, bearer validation, and push-token updates.
-- `src/server/services/staff-mobile-actions.ts` is the shared source for mobile `allowedActions`; it keeps refund-required paid Stripe orders out of routine staff cancellation while allowing routine cash confirmation and eligible unpaid/cash cancellation.
+- `src/server/services/staff-mobile-actions.ts` is the shared source for mobile `allowedActions`; it keeps paid Stripe orders out of routine cancellation and exposes the separate full refund-and-cancel action while allowing cash confirmation and eligible unpaid/cash cancellation.
 - `src/server/services/staff-order-mutations.ts` owns staff ETA mutation with optimistic version checks and audit logging. Routine status advancement remains in `src/server/services/ordering.ts`.
 - The plan's `/status` endpoint is implemented, and the older `/advance` endpoint remains for existing admin queue compatibility.
 - The separate React Native CLI Android app source lives in `apps/sahar-staff-android`. It never connects to MySQL and calls only Sahar HTTPS staff APIs.
@@ -177,3 +182,13 @@ This repository is the standalone website and admin panel for the single Pakista
 - React Native dependencies are pinned to the generated 0.86.2 template-compatible versions instead of `latest`, and `@react-native/metro-config` is explicitly installed so Metro can start.
 - Because this Windows workspace path is long, React Native New Architecture C++ codegen exceeded MAX_PATH for Firebase Messaging and safe-area-context native modules. Those native packages were removed for the runnable local app; push registration currently stores `null` and keeps local vibration alert behavior. Add FCM back from a shorter app path or after Windows long paths/native build compatibility is confirmed.
 - The Android app uses React Native built-in layout primitives instead of `react-native-safe-area-context` to avoid the same generated C++ path-length failure in this workspace.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

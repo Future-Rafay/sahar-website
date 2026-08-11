@@ -16,6 +16,7 @@ export type AllowedActions = {
   nextStatus: string | null;
   canConfirmCash: boolean;
   canCancel: boolean;
+  canRefundAndCancel: boolean;
 };
 
 export type Order = {
@@ -28,6 +29,7 @@ export type Order = {
   scheduledFor: string | null;
   estimatedReadyAt: string | null;
   totalRappen: number;
+  remainingRefundableRappen: number;
   version: number;
   note: string | null;
   address?: {

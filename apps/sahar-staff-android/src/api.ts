@@ -1,6 +1,10 @@
 import { API_BASE_URL } from "./config";
 import type { Order, Session } from "./types";
 
+export class ApiError extends Error {
+  constructor(public status: number, public code: string) { super(code); }
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -10,7 +14,10 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
       ...init.headers,
     },
   });
-  if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    throw new ApiError(response.status, body?.error ?? `HTTP_${response.status}`);
+  }
   return response.json() as Promise<T>;
 }
 
@@ -72,5 +79,12 @@ export function cancelOrder(accessToken: string, orderNumber: string, reason: st
   return request<{ status: "CANCELLED" }>(`/api/v1/staff/orders/${orderNumber}/cancel`, {
     method: "POST",
     body: JSON.stringify({ reason }),
+  }, accessToken);
+}
+
+export function refundAndCancelOrder(accessToken: string, order: Pick<Order, "orderNumber" | "version">, reason: string) {
+  return request<{ refundStatus: "PENDING" | "SUCCEEDED" | "FAILED" }>(`/api/v1/staff/orders/${order.orderNumber}/refund-cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason, refundKey: `${order.orderNumber}-${order.version}-full-cancel` }),
   }, accessToken);
 }
