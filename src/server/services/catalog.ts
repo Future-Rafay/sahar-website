@@ -1,6 +1,7 @@
 import type { Locale } from "@/generated/prisma/enums";
 import { prisma } from "@/server/db";
 import { zurichParts } from "@/lib/zurich-time";
+import { resolvePublicImageUrl } from "@/server/storage/s3";
 
 export async function getPublicConfig() {
   const [site, fulfillment, hours] = await Promise.all([
@@ -72,7 +73,7 @@ export async function getPublicMenu(locale: Locale, at = new Date()) {
         slug: product.slug,
         name: locale === "DE" ? product.nameDe : product.nameEn,
         description: locale === "DE" ? product.descriptionDe : product.descriptionEn,
-        imageKey: product.imageKey,
+        imageKey: resolvePublicImageUrl(product.imageKey),
         available: product.available && timedAvailable,
         isHalal: product.isHalal,
         isVegetarian: product.isVegetarian,

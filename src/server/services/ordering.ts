@@ -3,12 +3,14 @@ import type Stripe from "stripe";
 import { Prisma } from "@/generated/prisma/client";
 import type { FulfillmentType, Locale, OrderStatus } from "@/generated/prisma/enums";
 import { getStripeEnv } from "@/config/env";
-import { assertOptionCount, formatOrderNumber, hashToken, nextOrderStatus, parseOrderNumber, promoDiscount } from "@/lib/orders";
+import { allocateDiscount, assertOptionCount, formatOrderNumber, hashToken, nextOrderStatus, parseOrderNumber, promoDiscount, publicOrderAddress } from "@/lib/orders";
 import { zurichDateToUtc, zurichParts } from "@/lib/zurich-time";
 import { prisma } from "@/server/db";
 import { sendEmail } from "@/server/email/client";
 import { orderConfirmationEmail, orderStatusEmail } from "@/server/email/templates";
 import { getStripe } from "@/server/payments/stripe";
+import { resolvePublicImageUrl } from "@/server/storage/s3";
+import { syncStripeRefund } from "@/server/services/admin";
 import type { CreateOrderInput, QuoteInput } from "@/server/validators/order";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -118,6 +120,7 @@ export async function calculateQuote(input: QuoteInput, db: Db = prisma, userId?
       productNameEn: variant.product.nameEn,
       variantNameDe: variant.nameDe,
       variantNameEn: variant.nameEn,
+      imageUrl: resolvePublicImageUrl(variant.product.imageKey),
       unitPriceRappen,
       quantity: item.quantity,
       lineSubtotalRappen: unitPriceRappen * item.quantity,
@@ -228,6 +231,10 @@ async function failPendingOrder(orderId: bigint) {
 }
 
 export async function createOrder(input: CreateOrderInput, userId?: string) {
+  let stripeEnv: ReturnType<typeof getStripeEnv> | undefined;
+  if (input.paymentMethod === "STRIPE") {
+    try { stripeEnv = getStripeEnv(); } catch { throw new OrderError("PAYMENT_NOT_CONFIGURED"); }
+  }
   const checkoutKeyHash = hashToken(input.checkoutKey);
   const existing = await prisma.order.findUnique({ where: { checkoutKeyHash }, include: { payment: true } });
   if (existing) return createdOrderDto(existing, input.checkoutKey);
@@ -319,27 +326,32 @@ export async function createOrder(input: CreateOrderInput, userId?: string) {
           },
         } : undefined,
       },
-      include: { payment: true },
+      include: { payment: true, items: { include: { options: true, product: { select: { imageKey: true } } } } },
     });
   }, { isolationLevel: "Serializable" });
 
   if (input.paymentMethod === "STRIPE") {
     try {
       const orderNumber = formatOrderNumber(order.id);
+      const discountedTotals = allocateDiscount(order.items.map((item) => item.lineSubtotalRappen), order.discountRappen);
+      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = order.items.map((item, index) => {
+        const options = item.options.map((option) => input.locale === "de" ? option.nameDeSnapshot : option.nameEnSnapshot);
+        const imageUrl = resolvePublicImageUrl(item.product?.imageKey);
+        const absoluteImageUrl = imageUrl && (imageUrl.startsWith("http") ? imageUrl : new URL(imageUrl, stripeEnv!.APP_URL).toString());
+        return { quantity: 1, price_data: { currency: "chf", unit_amount: discountedTotals[index], product_data: {
+          name: `${item.quantity}× ${input.locale === "de" ? item.productNameDeSnapshot : item.productNameEnSnapshot}`,
+          description: [input.locale === "de" ? item.variantNameDeSnapshot : item.variantNameEnSnapshot, ...options].filter(Boolean).join(" · ") || undefined,
+          images: absoluteImageUrl ? [absoluteImageUrl] : undefined,
+        } } };
+      });
+      if (order.deliveryFeeRappen > 0) lineItems.push({ quantity: 1, price_data: { currency: "chf", unit_amount: order.deliveryFeeRappen, product_data: { name: input.locale === "de" ? "Liefergebühr" : "Delivery fee" } } });
       const session = await getStripe().checkout.sessions.create({
         mode: "payment",
         customer_email: order.customerEmail,
-        line_items: [{
-          quantity: 1,
-          price_data: {
-            currency: "chf",
-            unit_amount: order.totalRappen,
-            product_data: { name: `Sahar order ${orderNumber}` },
-          },
-        }],
+        line_items: lineItems,
         metadata: { orderId: order.id.toString(), orderNumber },
-        success_url: `${getStripeEnv().APP_URL}/${input.locale}/order/${orderNumber}?token=${input.checkoutKey}`,
-        cancel_url: `${getStripeEnv().APP_URL}/${input.locale}/checkout?cancelled=1`,
+        success_url: `${stripeEnv!.APP_URL}/${input.locale}/order/${orderNumber}?token=${input.checkoutKey}`,
+        cancel_url: `${stripeEnv!.APP_URL}/${input.locale}/checkout?cancelled=1`,
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
       }, { idempotencyKey: input.checkoutKey });
       await prisma.payment.update({ where: { orderId: order.id }, data: { stripeCheckoutSessionId: session.id } });
@@ -420,6 +432,8 @@ export async function processStripeEvent(event: Stripe.Event) {
       const payment = await prisma.payment.findUnique({ where: { orderId }, select: { stripeCheckoutSessionId: true } });
       if (payment?.stripeCheckoutSessionId !== event.data.object.id) throw new OrderError("STRIPE_EVENT_INVALID");
       await failPendingOrder(orderId);
+    } else if (event.type === "refund.created" || event.type === "refund.updated" || event.type === "refund.failed") {
+      await syncStripeRefund(event.data.object);
     }
     await prisma.stripeWebhookEvent.update({
       where: { eventId: event.id },
@@ -435,7 +449,7 @@ export async function processStripeEvent(event: Stripe.Event) {
 }
 
 const orderInclude = {
-  items: { include: { options: true } },
+  items: { include: { options: true, product: { select: { imageKey: true } } } },
   address: true,
   payment: true,
   statusEvents: { orderBy: { createdAt: "asc" as const } },
@@ -461,7 +475,8 @@ function orderDto(order: Prisma.OrderGetPayload<{ include: typeof orderInclude }
     totalRappen: order.totalRappen,
     version: order.version,
     createdAt: order.createdAt.toISOString(),
-    address: order.address,
+    updatedAt: order.updatedAt.toISOString(),
+    address: publicOrderAddress(order.address),
     items: order.items.map((item) => ({
       id: item.id,
       name: order.locale === "DE" ? item.productNameDeSnapshot : item.productNameEnSnapshot,
@@ -469,6 +484,7 @@ function orderDto(order: Prisma.OrderGetPayload<{ include: typeof orderInclude }
       unitPriceRappen: item.unitPriceRappen,
       quantity: item.quantity,
       lineSubtotalRappen: item.lineSubtotalRappen,
+      imageUrl: resolvePublicImageUrl(item.product?.imageKey),
       options: item.options.map((option) => order.locale === "DE" ? option.nameDeSnapshot : option.nameEnSnapshot),
     })),
     timeline: order.statusEvents.map((event) => ({ status: event.toStatus, at: event.createdAt.toISOString() })),
@@ -497,7 +513,7 @@ export async function getAdminOrders() {
   const orders = await prisma.order.findMany({
     where: { status: { in: ["PAYMENT_PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"] } },
     include: orderInclude,
-    orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }],
+    orderBy: { createdAt: "desc" },
   });
   return orders.map((order) => ({ ...orderDto(order), allowedNextStatus: nextOrderStatus(order.status, order.fulfillmentType) }));
 }

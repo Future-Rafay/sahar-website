@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertOptionCount, formatOrderNumber, nextOrderStatus, promoDiscount } from "@/lib/orders";
+import { allocateDiscount, assertOptionCount, formatOrderNumber, nextOrderStatus, promoDiscount, publicOrderAddress } from "@/lib/orders";
 import { zurichDateToUtc, zurichParts } from "@/lib/zurich-time";
 
 test("order money and lifecycle rules stay server-shaped", () => {
@@ -13,6 +13,13 @@ test("order money and lifecycle rules stay server-shaped", () => {
   assert.equal(nextOrderStatus("COMPLETED", "DELIVERY"), null);
   assert.equal(assertOptionCount({ minimumSelections: 1, maximumSelections: 2 }, 2), true);
   assert.equal(assertOptionCount({ minimumSelections: 1, maximumSelections: 2 }, 3), false);
+  assert.deepEqual(allocateDiscount([850, 1_200], 1_000), [0, 1_050]);
+});
+
+test("public order addresses never expose the BigInt order id", () => {
+  const address = publicOrderAddress({ recipientName: "Guest", phone: "+41", street: "Main 1", streetExtra: null, postalCode: "8304", city: "Wallisellen", countryCode: "CH", orderId: 42n } as Parameters<typeof publicOrderAddress>[0] & { orderId: bigint });
+  assert.equal(JSON.stringify(address).includes("orderId"), false);
+  assert.doesNotThrow(() => JSON.stringify(address));
 });
 
 test("Zurich local slots convert correctly across daylight saving time", () => {

@@ -1,16 +1,41 @@
 import { z } from "zod";
 
+import { zurichDateToUtc } from "@/lib/zurich-time";
+
 const optionalText = (max: number) => z.string().trim().max(max).optional().transform((value) => value || null);
 const integer = (minimum = 0) => z.coerce.number().int().min(minimum);
 const optionalInteger = (minimum = 0) => z.union([z.literal(""), z.coerce.number().int().min(minimum)]).transform((value) => value === "" ? null : value);
-const checkbox = z.union([z.literal("on"), z.literal("true"), z.literal("false"), z.undefined()]).transform((value) => value === "on" || value === "true");
+const checkbox = z.preprocess((value) => value === "on" || value === "true", z.boolean());
+const databaseId = z.string().trim().min(1).max(191);
+const chfRappen = z.string().trim().regex(/^\d+(?:\.\d{1,2})?$/, "Enter a valid CHF amount.").transform((value) => {
+  const [francs, decimals = ""] = value.split(".");
+  return Number(francs) * 100 + Number(decimals.padEnd(2, "0"));
+});
+const optionalChfRappen = z.union([z.literal(""), chfRappen]).transform((value) => value === "" ? null : value);
+const percentBasisPoints = z.string().trim().regex(/^\d+(?:\.\d{1,2})?$/, "Enter a valid percentage.").transform((value) => Math.round(Number(value) * 100));
+const minuteOfDay = z.union([
+  z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).transform((value) => {
+    const [hour, minute] = value.split(":").map(Number);
+    return hour * 60 + minute;
+  }),
+  z.coerce.number().int().min(0).max(1440),
+]);
+const optionalMinuteOfDay = z.union([z.literal(""), minuteOfDay]).transform((value) => value === "" ? null : value);
+const optionalZurichDateTime = z.union([
+  z.literal(""),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).transform((value) => {
+    const [date, time] = value.split("T");
+    const [hour, minute] = time.split(":").map(Number);
+    return zurichDateToUtc(date, hour * 60 + minute);
+  }),
+]).transform((value) => value === "" ? null : value);
 const bilingualName = {
   nameDe: z.string().trim().min(1).max(180),
   nameEn: z.string().trim().min(1).max(180),
 };
 
 export const categorySchema = z.object({
-  id: z.string().cuid().optional(),
+  id: databaseId.optional(),
   slug: z.string().trim().min(1).max(160).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   ...bilingualName,
   descriptionDe: optionalText(5000),
@@ -20,8 +45,8 @@ export const categorySchema = z.object({
 });
 
 export const productSchema = z.object({
-  id: z.string().cuid().optional(),
-  categoryId: z.string().cuid(),
+  id: databaseId.optional(),
+  categoryId: databaseId,
   slug: z.string().trim().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   ...bilingualName,
   descriptionDe: optionalText(10000),
@@ -38,18 +63,18 @@ export const productSchema = z.object({
 });
 
 export const variantSchema = z.object({
-  id: z.string().cuid().optional(),
-  productId: z.string().cuid(),
+  id: databaseId.optional(),
+  productId: databaseId,
   ...bilingualName,
   sku: optionalText(100),
-  priceRappen: integer(),
+  priceRappen: chfRappen,
   active: checkbox,
   sortOrder: integer(),
 });
 
 export const optionGroupSchema = z.object({
-  id: z.string().cuid().optional(),
-  productId: z.string().cuid(),
+  id: databaseId.optional(),
+  productId: databaseId,
   ...bilingualName,
   required: checkbox,
   minimumSelections: integer(),
@@ -59,20 +84,20 @@ export const optionGroupSchema = z.object({
 }).refine((value) => value.minimumSelections <= value.maximumSelections, { message: "Minimum selections cannot exceed maximum selections." });
 
 export const optionChoiceSchema = z.object({
-  id: z.string().cuid().optional(),
-  optionGroupId: z.string().cuid(),
+  id: databaseId.optional(),
+  optionGroupId: databaseId,
   ...bilingualName,
-  priceDeltaRappen: integer(),
+  priceDeltaRappen: chfRappen,
   active: checkbox,
   sortOrder: integer(),
 });
 
 export const availabilityWindowSchema = z.object({
-  id: z.string().cuid().optional(),
-  productId: z.string().cuid(),
+  id: databaseId.optional(),
+  productId: databaseId,
   weekday: z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]),
-  startMinute: integer().max(1439),
-  endMinute: integer(1).max(1440),
+  startMinute: minuteOfDay.pipe(z.number().max(1439)),
+  endMinute: minuteOfDay.pipe(z.number().min(1).max(1440)),
 }).refine((value) => value.startMinute < value.endMinute, { message: "Start must be before end." });
 
 export const fulfillmentSchema = z.object({
@@ -91,40 +116,40 @@ export const fulfillmentSchema = z.object({
 }).refine((value) => value.deliveryEnabled || value.pickupEnabled, { message: "Enable delivery or pickup." });
 
 export const openingWindowSchema = z.object({
-  id: z.string().cuid().optional(),
+  id: databaseId.optional(),
   fulfillmentType: z.enum(["DELIVERY", "PICKUP"]),
   weekday: z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]),
-  startMinute: integer().max(1439),
-  endMinute: integer(1).max(1440),
+  startMinute: minuteOfDay.pipe(z.number().max(1439)),
+  endMinute: minuteOfDay.pipe(z.number().min(1).max(1440)),
   active: checkbox,
   sortOrder: integer(),
 }).refine((value) => value.startMinute < value.endMinute, { message: "Start must be before end." });
 
 export const serviceExceptionSchema = z.object({
-  id: z.string().cuid().optional(),
+  id: databaseId.optional(),
   date: z.coerce.date(),
   fulfillmentType: z.enum(["DELIVERY", "PICKUP"]),
   closed: checkbox,
-  startMinute: optionalInteger().pipe(z.number().max(1439).nullable()),
-  endMinute: optionalInteger(1).pipe(z.number().max(1440).nullable()),
+  startMinute: optionalMinuteOfDay.pipe(z.number().max(1439).nullable()),
+  endMinute: optionalMinuteOfDay.pipe(z.number().min(1).max(1440).nullable()),
   note: optionalText(300),
 }).refine((value) => value.closed || (value.startMinute !== null && value.endMinute !== null && value.startMinute < value.endMinute), { message: "Replacement hours require a valid start and end." });
 
 export const zoneSchema = z.object({
-  id: z.string().cuid().optional(),
+  id: databaseId.optional(),
   nameDe: z.string().trim().min(1).max(120),
   nameEn: z.string().trim().min(1).max(120),
   active: checkbox,
-  feeRappen: integer(),
-  minimumSubtotalRappen: integer(),
-  freeDeliveryThresholdRappen: optionalInteger(),
+  feeRappen: chfRappen,
+  minimumSubtotalRappen: chfRappen,
+  freeDeliveryThresholdRappen: optionalChfRappen,
   estimatedMinutes: integer(1).max(1440),
   sortOrder: integer(),
 });
 
 export const postalCodeSchema = z.object({
-  id: z.string().cuid().optional(),
-  deliveryZoneId: z.string().cuid(),
+  id: databaseId.optional(),
+  deliveryZoneId: databaseId,
   postalCode: z.string().trim().regex(/^\d{4}$/),
 });
 
@@ -156,29 +181,37 @@ export const siteSettingsSchema = z.object({
 });
 
 export const promoSchema = z.object({
-  id: z.string().cuid().optional(),
+  id: databaseId.optional(),
   code: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/).transform((value) => value.toUpperCase()),
   type: z.enum(["FIXED", "PERCENT"]),
-  value: integer(1),
-  minimumSubtotalRappen: integer(),
-  startsAt: z.union([z.literal(""), z.coerce.date()]).transform((value) => value === "" ? null : value),
-  endsAt: z.union([z.literal(""), z.coerce.date()]).transform((value) => value === "" ? null : value),
+  value: z.string().trim(),
+  minimumSubtotalRappen: chfRappen,
+  startsAt: optionalZurichDateTime,
+  endsAt: optionalZurichDateTime,
   totalUsageLimit: optionalInteger(1),
   perCustomerLimit: optionalInteger(1),
   active: checkbox,
-}).refine((value) => value.type !== "PERCENT" || value.value <= 10000, { message: "Percentage cannot exceed 100%." })
+}).transform((value) => ({
+  ...value,
+  value: value.type === "PERCENT" ? percentBasisPoints.parse(value.value) : chfRappen.parse(value.value),
+})).refine((value) => value.type !== "PERCENT" || value.value <= 10000, { message: "Percentage cannot exceed 100%." })
   .refine((value) => !value.startsAt || !value.endsAt || value.startsAt < value.endsAt, { message: "End must be after start." });
 
 export const refundSchema = z.object({
   orderNumber: z.string().regex(/^SAH-\d{6,}$/i),
-  amountRappen: integer(1),
+  amountRappen: chfRappen.pipe(z.number().min(1)),
   reason: z.string().trim().min(3).max(500),
   refundKey: z.string().uuid(),
   cancelOrder: checkbox,
+});
+
+export const refundAndCancelSchema = z.object({
+  orderNumber: z.string().regex(/^SAH-\d{6,}$/i),
+  reason: z.string().trim().min(3).max(500),
+  refundKey: z.string().trim().min(8).max(255),
 });
 
 export const cancelOrderSchema = z.object({
   orderNumber: z.string().regex(/^SAH-\d{6,}$/i),
   reason: z.string().trim().min(3).max(500),
 });
-

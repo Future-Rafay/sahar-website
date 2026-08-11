@@ -53,3 +53,9 @@ export async function createImageUploadUrl(input: z.input<typeof uploadInputSche
     uploadUrl: await getSignedUrl(getS3Client(), command, { expiresIn: 300 }),
   };
 }
+
+export function resolvePublicImageUrl(key: string | null | undefined) {
+  if (!key) return null;
+  if (/^https?:\/\//i.test(key) || key.startsWith("/")) return key;
+  return `${getS3Env().S3_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key.replace(/^\//, "")}`;
+}

@@ -12,5 +12,8 @@ export function allowedOrderActions(order: {
     canCancel:
       !["COMPLETED", "CANCELLED"].includes(order.status) &&
       !(order.payment?.provider === "STRIPE" && ["PAID", "PARTIALLY_REFUNDED"].includes(order.payment.status)),
+    canRefundAndCancel:
+      !["COMPLETED", "CANCELLED"].includes(order.status) &&
+      order.payment?.provider === "STRIPE" && ["PAID", "PARTIALLY_REFUNDED"].includes(order.payment.status),
   };
 }

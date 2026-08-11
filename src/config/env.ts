@@ -94,3 +94,7 @@ export function getEmailEnv() {
 export function getStripeEnv() {
   return stripeSchema.parse(process.env);
 }
+
+export function getStaffApkUrl() {
+  return z.string().url().optional().parse(process.env.STAFF_APK_URL || undefined);
+}

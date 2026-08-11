@@ -16,6 +16,8 @@ export async function POST(request: Request) {
       totalRappen: quote.totalRappen,
       delivery: quote.delivery,
       promoCode: quote.promo?.code ?? null,
+      promoMinimumSubtotalRappen: quote.promo?.minimumSubtotalRappen ?? null,
+      estimatedMinutes: quote.estimatedMinutes,
     });
   } catch (error) {
     return apiError(error);

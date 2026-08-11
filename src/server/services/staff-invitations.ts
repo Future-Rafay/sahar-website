@@ -29,8 +29,13 @@ export async function inviteStaff(ownerId: string, input: z.input<typeof inviteS
   });
 
   const invitationUrl = `${getEmailEnv().APP_URL}/admin/invitations/accept?token=${encodeURIComponent(token)}`;
-  await sendEmail({ to: email, ...staffInvitationEmail({ invitationUrl }) });
-  return { email, expiresAt };
+  try {
+    await sendEmail({ to: email, ...staffInvitationEmail({ invitationUrl }) });
+    return { email, expiresAt, emailSent: true };
+  } catch (error) {
+    console.warn("Staff invitation saved but email delivery failed:", error instanceof Error ? error.message : "Unknown email error");
+    return { email, expiresAt, emailSent: false };
+  }
 }
 
 export async function acceptStaffInvitation(input: z.input<typeof acceptStaffInvitationSchema>) {

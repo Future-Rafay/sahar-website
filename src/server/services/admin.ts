@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import type Stripe from "stripe";
 import { formatOrderNumber, parseOrderNumber } from "@/lib/orders";
 import { prisma } from "@/server/db";
 import { getStripe } from "@/server/payments/stripe";
@@ -93,6 +94,31 @@ export async function getAdminOrder(orderNumber: string) {
 
 export async function getAuditLogs() {
   return prisma.auditLog.findMany({ include: { actor: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" }, take: 250 });
+}
+
+export async function getDashboardData() {
+  const [payments, totalOrders, totalProducts, availableProducts, activeOrders, pendingStripe, recentRows] = await Promise.all([
+    prisma.payment.aggregate({
+      where: { status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+      _sum: { amountRappen: true, refundedRappen: true },
+    }),
+    prisma.order.count(),
+    prisma.product.count({ where: { deletedAt: null } }),
+    prisma.product.count({ where: { deletedAt: null, active: true, available: true } }),
+    prisma.order.count({ where: { status: { in: ["PAYMENT_PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"] } } }),
+    prisma.payment.count({ where: { provider: "STRIPE", status: "PENDING", order: { status: "PAYMENT_PENDING" } } }),
+    prisma.order.findMany({ include: adminOrderInclude, orderBy: { createdAt: "desc" }, take: 10 }),
+  ]);
+  return {
+    revenueRappen: Math.max(0, (payments._sum.amountRappen ?? 0) - (payments._sum.refundedRappen ?? 0)),
+    totalOrders,
+    totalProducts,
+    availableProducts,
+    unavailableProducts: totalProducts - availableProducts,
+    activeOrders,
+    pendingStripe,
+    recentOrders: recentRows.map(adminOrderDto),
+  };
 }
 
 export async function saveCategory(actorId: string, data: Prisma.CategoryUncheckedCreateInput & { id?: string }) {
@@ -252,30 +278,70 @@ export async function cancelOrder(actorId: string, orderNumber: string, reason: 
 export async function refundOrder(actorId: string, input: { orderNumber: string; amountRappen: number; reason: string; refundKey: string; cancelOrder: boolean }) {
   const id = parseOrderNumber(input.orderNumber);
   if (!id) throw new AdminError("ORDER_NOT_FOUND");
-  const order = await prisma.order.findUnique({ where: { id }, include: { payment: true } });
+  const [order, actor] = await Promise.all([
+    prisma.order.findUnique({ where: { id }, include: { payment: true } }),
+    prisma.user.findFirst({ where: { id: actorId, active: true, role: { in: ["OWNER", "STAFF"] } }, select: { role: true } }),
+  ]);
   const payment = order?.payment;
-  if (!order || !payment) throw new AdminError("ORDER_NOT_FOUND");
+  if (!order || !payment || !actor) throw new AdminError("ORDER_NOT_FOUND");
   if (payment.provider !== "STRIPE" || !payment.stripePaymentIntentId || !["PAID", "PARTIALLY_REFUNDED"].includes(payment.status)) throw new AdminError("REFUND_NOT_ALLOWED");
   const remaining = payment.amountRappen - payment.refundedRappen;
   if (input.amountRappen > remaining || (input.cancelOrder && input.amountRappen !== remaining)) throw new AdminError("REFUND_AMOUNT_INVALID");
+  if (actor.role === "STAFF" && (!input.cancelOrder || input.amountRappen !== remaining)) throw new AdminError("FULL_REFUND_REQUIRED");
   if (input.cancelOrder && ["COMPLETED", "CANCELLED"].includes(order.status)) throw new AdminError("CANCELLATION_NOT_ALLOWED");
 
-  const stripeRefund = await getStripe().refunds.create({ payment_intent: payment.stripePaymentIntentId, amount: input.amountRappen, metadata: { orderId: id.toString(), reason: input.reason } }, { idempotencyKey: input.refundKey });
-  return prisma.$transaction(async (tx) => {
+  const stripeRefund = await getStripe().refunds.create({ payment_intent: payment.stripePaymentIntentId, amount: input.amountRappen, metadata: { orderId: id.toString(), reason: input.reason, cancelOrder: String(input.cancelOrder), actorUserId: actorId } }, { idempotencyKey: input.refundKey });
+  const refund = await prisma.$transaction(async (tx) => {
     const existing = await tx.refund.findUnique({ where: { stripeRefundId: stripeRefund.id } });
     if (existing) return existing;
-    const newRefunded = payment.refundedRappen + input.amountRappen;
-    const refund = await tx.refund.create({ data: { paymentId: payment.id, requestedByUserId: actorId, stripeRefundId: stripeRefund.id, amountRappen: input.amountRappen, reason: input.reason, status: stripeRefund.status === "failed" ? "FAILED" : stripeRefund.status === "succeeded" ? "SUCCEEDED" : "PENDING", failureMessage: stripeRefund.failure_reason } });
-    if (stripeRefund.status === "failed") return refund;
-    await tx.payment.update({ where: { id: payment.id }, data: { refundedRappen: newRefunded, status: newRefunded === payment.amountRappen ? "REFUNDED" : "PARTIALLY_REFUNDED" } });
+    const failed = stripeRefund.status === "failed" || stripeRefund.status === "canceled";
+    const created = await tx.refund.create({ data: { paymentId: payment.id, requestedByUserId: actorId, stripeRefundId: stripeRefund.id, amountRappen: input.amountRappen, reason: input.reason, status: failed ? "FAILED" : "PENDING", failureMessage: stripeRefund.failure_reason } });
     await audit(tx, actorId, "STRIPE_REFUND_REQUESTED", "Order", id.toString(), { amountRappen: input.amountRappen, reason: input.reason, stripeRefundId: stripeRefund.id });
-    if (input.cancelOrder) {
-      await tx.order.update({ where: { id }, data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: input.reason, version: { increment: 1 } } });
-      await tx.orderStatusEvent.create({ data: { orderId: id, actorUserId: actorId, fromStatus: order.status, toStatus: "CANCELLED", reason: input.reason } });
+    return created;
+  });
+  if (stripeRefund.status === "succeeded") {
+    await settleSucceededRefund(stripeRefund.id, input.cancelOrder);
+    return prisma.refund.findUniqueOrThrow({ where: { stripeRefundId: stripeRefund.id } });
+  }
+  return refund;
+}
+
+async function settleSucceededRefund(stripeRefundId: string, cancelOrder: boolean) {
+  return prisma.$transaction(async (tx) => {
+    const refund = await tx.refund.findUnique({ where: { stripeRefundId }, include: { payment: { include: { order: true } } } });
+    if (!refund || refund.status === "FAILED") return;
+    if (refund.status === "SUCCEEDED") return;
+    const payment = refund.payment;
+    const order = payment.order;
+    const refundedRappen = Math.min(payment.amountRappen, payment.refundedRappen + refund.amountRappen);
+    await tx.refund.update({ where: { id: refund.id }, data: { status: "SUCCEEDED", failureMessage: null } });
+    await tx.payment.update({ where: { id: payment.id }, data: { refundedRappen, status: refundedRappen === payment.amountRappen ? "REFUNDED" : "PARTIALLY_REFUNDED" } });
+    await tx.auditLog.create({ data: { actorUserId: refund.requestedByUserId, action: "STRIPE_REFUND_SUCCEEDED", entityType: "Order", entityId: order.id.toString(), metadata: { amountRappen: refund.amountRappen, stripeRefundId } } });
+    if (cancelOrder && refundedRappen === payment.amountRappen && !["COMPLETED", "CANCELLED"].includes(order.status)) {
+      await tx.order.update({ where: { id: order.id }, data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: refund.reason, version: { increment: 1 } } });
+      await tx.orderStatusEvent.create({ data: { orderId: order.id, actorUserId: refund.requestedByUserId, fromStatus: order.status, toStatus: "CANCELLED", reason: refund.reason } });
       if (order.slotId) await tx.fulfillmentSlot.updateMany({ where: { id: order.slotId, bookedCount: { gt: 0 } }, data: { bookedCount: { decrement: 1 }, updatedAt: new Date() } });
-      await audit(tx, actorId, "ORDER_CANCELLED_AFTER_REFUND", "Order", id.toString(), { stripeRefundId: stripeRefund.id });
+      await tx.auditLog.create({ data: { actorUserId: refund.requestedByUserId, action: "ORDER_CANCELLED_AFTER_REFUND", entityType: "Order", entityId: order.id.toString(), metadata: { stripeRefundId } } });
     }
-    return refund;
   });
 }
 
+export async function syncStripeRefund(stripeRefund: Stripe.Refund) {
+  const existing = await prisma.refund.findUnique({ where: { stripeRefundId: stripeRefund.id }, select: { id: true, status: true } });
+  if (!existing) return;
+  if (existing.status === "SUCCEEDED") return;
+  if (stripeRefund.status === "succeeded") {
+    await settleSucceededRefund(stripeRefund.id, stripeRefund.metadata?.cancelOrder === "true");
+    return;
+  }
+  const failed = stripeRefund.status === "failed" || stripeRefund.status === "canceled";
+  await prisma.refund.update({ where: { stripeRefundId: stripeRefund.id }, data: { status: failed ? "FAILED" : "PENDING", failureMessage: stripeRefund.failure_reason } });
+}
+
+export async function refundAndCancelOrder(actorId: string, orderNumber: string, reason: string, refundKey: string) {
+  const id = parseOrderNumber(orderNumber);
+  if (!id) throw new AdminError("ORDER_NOT_FOUND");
+  const payment = await prisma.payment.findUnique({ where: { orderId: id }, select: { amountRappen: true, refundedRappen: true } });
+  if (!payment) throw new AdminError("ORDER_NOT_FOUND");
+  return refundOrder(actorId, { orderNumber, reason, refundKey, cancelOrder: true, amountRappen: payment.amountRappen - payment.refundedRappen });
+}

@@ -19,7 +19,7 @@ export function apiError(error: unknown) {
   }
   if (error instanceof AdminError) return NextResponse.json({ error: error.code }, { status: error.code === "ORDER_NOT_FOUND" ? 404 : 400 });
   if (error instanceof StaffMobileAuthError) {
-    const status = error.code === "FORBIDDEN" ? 403 : error.code === "TOKEN_REQUIRED" ? 401 : 400;
+    const status = error.code === "FORBIDDEN" ? 403 : ["TOKEN_REQUIRED", "TOKEN_INVALID", "TOKEN_EXPIRED"].includes(error.code) ? 401 : 400;
     return NextResponse.json({ error: error.code }, { status });
   }
   if (error instanceof Error && error.message === "FORBIDDEN") return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });

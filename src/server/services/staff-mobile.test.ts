@@ -11,7 +11,7 @@ test("staff allowed actions keep refund-required Stripe orders out of routine ca
       fulfillmentType: "DELIVERY",
       payment: { provider: "STRIPE", status: "PAID" },
     }),
-    { nextStatus: "PREPARING", canConfirmCash: false, canCancel: false },
+    { nextStatus: "PREPARING", canConfirmCash: false, canCancel: false, canRefundAndCancel: true },
   );
 });
 
@@ -22,7 +22,7 @@ test("staff allowed actions expose routine cash confirmation and cancellation", 
       fulfillmentType: "PICKUP",
       payment: { provider: "CASH", status: "PENDING" },
     }),
-    { nextStatus: "PREPARING", canConfirmCash: true, canCancel: true },
+    { nextStatus: "PREPARING", canConfirmCash: true, canCancel: true, canRefundAndCancel: false },
   );
 });
 

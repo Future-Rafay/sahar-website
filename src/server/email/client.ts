@@ -7,6 +7,7 @@ export type EmailMessage = {
   subject: string;
   html: string;
   text: string;
+  replyTo?: string;
 };
 
 let resend: Resend | undefined;

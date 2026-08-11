@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "examinox.s3.us-east-1.amazonaws.com"
+      }
+    ]
+  }
 };
 
 export default withNextIntl(nextConfig);
