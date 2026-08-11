@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Banknote,
-  CheckCircle2,
   Coffee,
-  XCircle,
+  ExternalLink,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EtaEditor } from "@/components/admin/eta-editor";
 import { formatChf } from "@/lib/orders";
 
 type AdminOrder = {
@@ -23,10 +24,10 @@ type AdminOrder = {
   paymentStatus?: string | null;
   totalRappen: number;
   version: number;
+  estimatedReadyAt: string | null;
   items: Array<{ id: string; name: string; quantity: number; options: string[] }>;
   allowedNextStatus: string | null;
 };
-type Product = { id: string; name: string; available: boolean };
 
 const statusPills: Record<string, string> = {
   PAYMENT_PENDING: "bg-slate-100 text-slate-800 border-slate-300",
@@ -46,7 +47,7 @@ const labels: Record<string, string> = {
   COMPLETED: "Completed",
 };
 
-export function AdminQueue({ orders, products }: { orders: AdminOrder[]; products: Product[] }) {
+export function AdminQueue({ orders }: { orders: AdminOrder[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -111,7 +112,7 @@ export function AdminQueue({ orders, products }: { orders: AdminOrder[]; product
             <p className="text-xs text-muted">New incoming orders will appear here automatically.</p>
           </Card>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
             {orders.map((order) => (
               <Card key={order.orderNumber} className="p-5 border-[#E1E3E5] bg-white space-y-4 shadow-2xs hover:shadow-xs transition-shadow">
                 <div className="flex items-start justify-between gap-4 border-b border-[#E1E3E5] pb-3">
@@ -150,6 +151,7 @@ export function AdminQueue({ orders, products }: { orders: AdminOrder[]; product
                 </ul>
 
                 <div className="flex flex-wrap gap-2 border-t border-[#E1E3E5] pt-3">
+                  <Link href={`/admin/orders/${order.orderNumber}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border bg-white px-3 text-xs font-bold text-primary"><ExternalLink className="size-3.5" />View details</Link>
                   {order.allowedNextStatus && (
                     <Button
                       size="compact"
@@ -179,53 +181,13 @@ export function AdminQueue({ orders, products }: { orders: AdminOrder[]; product
                     </Button>
                   )}
                 </div>
+                <EtaEditor orderNumber={order.orderNumber} version={order.version} estimatedReadyAt={order.estimatedReadyAt} fulfillmentType={order.fulfillmentType} />
               </Card>
             ))}
           </div>
         )}
       </section>
 
-      {/* Sold Out Controls Section */}
-      <section aria-labelledby="availability-title" className="space-y-4 border-t border-[#E1E3E5] pt-8">
-        <div>
-          <h2 id="availability-title" className="font-display text-lg font-bold text-[#202223]">
-            Fast Sold-Out Controls
-          </h2>
-          <p className="text-xs text-muted">Quickly toggle dish availability for immediate online menu updates.</p>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((product) => (
-            <Card key={product.id} className="p-3.5 border-[#E1E3E5] bg-white flex items-center justify-between gap-3 shadow-2xs">
-              <div className="space-y-0.5 truncate">
-                <span className="font-bold text-xs text-foreground truncate block">{product.name}</span>
-                <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${product.available ? "text-emerald-700" : "text-destructive"}`}>
-                  {product.available ? (
-                    <CheckCircle2 className="h-3 w-3" />
-                  ) : (
-                    <XCircle className="h-3 w-3" />
-                  )}
-                  {product.available ? "In Stock" : "Sold Out"}
-                </span>
-              </div>
-              <Button
-                size="compact"
-                variant={product.available ? "outline" : "secondary"}
-                className="text-[11px] font-bold shrink-0"
-                disabled={busy === product.id}
-                onClick={() =>
-                  mutate(product.id, `/api/v1/staff/products/${product.id}/availability`, {
-                    available: !product.available,
-                  })
-                }
-              >
-                {product.available ? "Mark Sold Out" : "Mark Available"}
-              </Button>
-            </Card>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
-

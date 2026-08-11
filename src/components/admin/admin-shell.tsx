@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -10,6 +11,7 @@ import {
   Clock,
   ClipboardList,
   ExternalLink,
+  Download,
   Globe,
   LayoutDashboard,
   LogOut,
@@ -32,9 +34,8 @@ type AdminUser = {
   role: "OWNER" | "STAFF";
 };
 
-export function AdminShell({ user, children }: { user: AdminUser; children: ReactNode }) {
+export function AdminShell({ user, children, staffApkUrl }: { user: AdminUser; children: ReactNode; staffApkUrl?: string }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -51,10 +52,7 @@ export function AdminShell({ user, children }: { user: AdminUser; children: Reac
 
   async function handleLogout() {
     setUserDropdownOpen(false);
-    try {
-      await fetch("/api/auth/signout", { method: "POST" });
-    } catch {}
-    router.push("/admin/login");
+    await signOut({ callbackUrl: "/admin/login" });
   }
 
   const isOwner = user.role === "OWNER";
@@ -63,7 +61,8 @@ export function AdminShell({ user, children }: { user: AdminUser; children: Reac
     {
       title: "Operations",
       items: [
-        { label: "Live Queue", href: "/admin", icon: <Zap className="h-4 w-4" /> },
+        { label: "Dashboard", href: "/admin", icon: <LayoutDashboard className="h-4 w-4" /> },
+        { label: "Live Queue", href: "/admin/orders/live", icon: <Zap className="h-4 w-4" /> },
         { label: "Orders History", href: "/admin/orders", icon: <ShoppingBag className="h-4 w-4" /> },
         { label: "Availability", href: "/admin/availability", icon: <AlertTriangle className="h-4 w-4" /> },
       ],
@@ -93,6 +92,7 @@ export function AdminShell({ user, children }: { user: AdminUser; children: Reac
 
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin";
+    if (href === "/admin/orders") return pathname === "/admin/orders" || /^\/admin\/orders\/SAH-/i.test(pathname ?? "");
     return pathname?.startsWith(href);
   }
 
@@ -113,7 +113,7 @@ export function AdminShell({ user, children }: { user: AdminUser; children: Reac
             {/* Brand Box */}
             <div className="flex items-center justify-between px-2 py-1">
               <div className="relative h-8 w-28">
-                <Image src="/brand/sahar-logo.png" alt="Sahar Logo" fill className="object-contain object-left" />
+                <Image src="/brand/sahar-logo.png" alt="Sahar Logo" fill sizes="112px" className="object-contain object-left" />
               </div>
               <span className="rounded bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-bold text-primary uppercase">
                 {user.role}
@@ -190,16 +190,10 @@ export function AdminShell({ user, children }: { user: AdminUser; children: Reac
 
             {/* Right Action Cluster */}
             <div className="flex items-center gap-3">
-              {/* Go to Website Button */}
-              <Link
-                href="/de"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border/80 bg-surface-warm/70 px-3 text-xs font-bold text-primary hover:border-secondary hover:bg-surface-warm transition-all"
-              >
-                <Globe className="h-3.5 w-3.5" />
-                <span>Go to Website</span>
-              </Link>
+              <div className="group relative hidden sm:block">
+                {staffApkUrl ? <a href={staffApkUrl} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border/80 bg-surface-warm/70 px-3 text-xs font-bold text-primary transition-all hover:border-secondary hover:bg-surface-warm" aria-describedby="apk-download-help"><Download aria-hidden="true" className="h-3.5 w-3.5" /><span>Download staff app</span></a> : <button type="button" disabled className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border/80 bg-surface-warm/70 px-3 text-xs font-bold text-muted"><Download aria-hidden="true" className="h-3.5 w-3.5" /><span>Staff app unavailable</span></button>}
+                <span id="apk-download-help" role="tooltip" className="pointer-events-none absolute right-0 top-12 z-50 hidden w-64 rounded-lg bg-[#202223] p-3 text-xs font-medium leading-5 text-white shadow-xl group-hover:block group-focus-within:block">{staffApkUrl ? "Downloads the signed Sahar staff Android app." : "A signed production APK has not been published yet."}</span>
+              </div>
 
               {/* FAR-RIGHT USER PROFILE DROPDOWN */}
               <div className="relative" ref={dropdownRef}>

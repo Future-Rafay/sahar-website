@@ -1,8 +1,11 @@
 import { adminAction } from "@/app/admin/(protected)/actions";
+import { AdminFormDialog } from "@/components/admin/admin-form-dialog";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import { AdminPage, Check, EditLink, Empty, Field, Notice, SaveBar, SelectField } from "@/components/admin/admin-ui";
 import { ProductsFilter } from "@/components/admin/products-filter";
-import { Card } from "@/components/ui/card";
+import { SlugField } from "@/components/admin/slug-field";
 import { getMenuAdminData } from "@/server/services/admin";
+import { resolvePublicImageUrl } from "@/server/storage/s3";
 
 export default async function ProductsPage({
   searchParams,
@@ -30,6 +33,7 @@ export default async function ProductsPage({
           nameDe: p.nameDe,
           active: p.active,
           available: p.available,
+          imageUrl: resolvePublicImageUrl(p.imageKey),
           category: { id: p.categoryId, nameEn: p.category.nameEn },
           variants: p.variants,
           optionGroups: p.optionGroups,
@@ -40,8 +44,7 @@ export default async function ProductsPage({
         {categories.length === 0 ? (
           <Empty>Add a category before creating products.</Empty>
         ) : (
-          <Card>
-            <h2 className="font-display text-xl font-semibold">Add product</h2>
+          <AdminFormDialog trigger="Add product" title="Add product" description="Create the product, then add prices and options." variant="primary">
             <form action={adminAction} className="mt-4 space-y-4">
               <input type="hidden" name="intent" value="product" />
               <div className="grid gap-4 sm:grid-cols-2">
@@ -52,12 +55,13 @@ export default async function ProductsPage({
                     </option>
                   ))}
                 </SelectField>
-                <Field label="Slug" name="slug" required />
+                <SlugField />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="German name" name="nameDe" required />
                 <Field label="English name" name="nameEn" required />
               </div>
+              <ImageUploadField />
               <Field label="Sort order" name="sortOrder" type="number" min="0" defaultValue="0" required />
               <div className="flex flex-wrap gap-5">
                 <Check label="Published" name="active" defaultChecked />
@@ -68,7 +72,7 @@ export default async function ProductsPage({
               <input type="hidden" name="allergenIds" value="" />
               <SaveBar returnTo={returnTo} label="Add product" />
             </form>
-          </Card>
+          </AdminFormDialog>
         )}
       </ProductsFilter>
     </AdminPage>

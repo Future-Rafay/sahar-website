@@ -33,15 +33,17 @@ export function AdminPage({
   );
 }
 
-export function Notice({ saved, error }: { saved?: string; error?: string }) {
-  if (!saved && !error) return null;
+export function Notice({ saved, error, warning }: { saved?: string; error?: string; warning?: string }) {
+  if (!saved && !error && !warning) return null;
   return (
     <div
-      role={error ? "alert" : "status"}
+      role={error || warning ? "alert" : "status"}
       className={cn(
         "mb-6 flex items-center gap-3 rounded-xl border p-4 text-xs font-semibold shadow-xs animate-scale-in",
         error
           ? "border-destructive/40 bg-destructive/5 text-destructive"
+          : warning
+            ? "border-amber-500/40 bg-amber-50 text-amber-900"
           : "border-emerald-500/40 bg-emerald-50 text-emerald-800"
       )}
     >
@@ -50,7 +52,7 @@ export function Notice({ saved, error }: { saved?: string; error?: string }) {
       ) : (
         <CheckCircle2 className="h-4 w-4 shrink-0" />
       )}
-      <span>{error ? error.replaceAll("_", " ") : "Changes successfully saved."}</span>
+      <span>{error ? error.replaceAll("_", " ") : warning ? "Invitation saved, but the email could not be sent. Check the Resend configuration and invite again." : "Changes successfully saved."}</span>
     </div>
   );
 }
@@ -184,5 +186,4 @@ export function EditLink({ href, children = "Manage" }: { href: string; children
     </Link>
   );
 }
-
 

@@ -21,7 +21,7 @@ import {
 } from "@/server/validators/admin";
 import { inviteStaffSchema } from "@/server/validators/staff-invitation";
 
-const idSchema = z.string().cuid();
+const idSchema = z.string().trim().min(1).max(191);
 const menuKindSchema = z.enum(["category", "product", "variant", "optionGroup", "optionChoice"]);
 
 function values(formData: FormData) {
@@ -50,10 +50,11 @@ function errorCode(error: unknown) {
 
 export async function adminAction(formData: FormData) {
   const returnTo = safeReturnTo(formData);
+  let warning = "";
   try {
     const input = values(formData);
     const intent = z.string().min(1).parse(input.intent);
-    const ownerOnly = !["product_availability", "cancel_order"].includes(intent);
+    const ownerOnly = !["product_availability", "cancel_order", "refund"].includes(intent);
     const actor = await requireRole(...(ownerOnly ? ["OWNER" as const] : ["OWNER" as const, "STAFF" as const]));
     switch (intent) {
       case "category": await saveCategory(actor.id, categorySchema.parse(input)); break;
@@ -74,7 +75,7 @@ export async function adminAction(formData: FormData) {
       case "delete_postal_code": await deletePostalCode(actor.id, idSchema.parse(input.id)); break;
       case "site_settings": await saveSiteSettings(actor.id, siteSettingsSchema.parse(input)); break;
       case "promo": await savePromo(actor.id, promoSchema.parse(input)); break;
-      case "invite_staff": await inviteStaff(actor.id, inviteStaffSchema.parse(input)); break;
+      case "invite_staff": { const result = await inviteStaff(actor.id, inviteStaffSchema.parse(input)); if (!result.emailSent) warning = "INVITATION_SAVED_EMAIL_FAILED"; break; }
       case "staff_active": await setStaffActive(actor.id, idSchema.parse(input.id), input.active === "true"); break;
       case "cancel_order": { const parsed = cancelOrderSchema.parse(input); await cancelOrder(actor.id, parsed.orderNumber, parsed.reason); break; }
       case "refund": await refundOrder(actor.id, refundSchema.parse(input)); break;
@@ -84,5 +85,5 @@ export async function adminAction(formData: FormData) {
   } catch (error) {
     redirect(`${returnTo}?error=${encodeURIComponent(errorCode(error))}`);
   }
-  redirect(`${returnTo}?saved=1`);
+  redirect(`${returnTo}?saved=1${warning ? `&warning=${warning}` : ""}`);
 }
